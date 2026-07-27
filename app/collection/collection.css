@@ -1,0 +1,240 @@
+/* ---- Shardfall collection screen ------------------------------------------ */
+
+.colMain {
+  position: relative; min-height: 100dvh;
+  padding: clamp(24px, 5vh, 52px) clamp(16px, 4vw, 56px) 72px;
+  display: flex; flex-direction: column; gap: 22px;
+}
+.colBackdrop { position: fixed; inset: 0; z-index: -1; background: var(--ground); }
+.colBackdrop::before {
+  content: ""; position: absolute; inset: 0;
+  background: url("/board/glasswake.jpg") center 30% / cover no-repeat;
+  filter: brightness(.26) saturate(.75);
+}
+.colBackdrop::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(19,16,23,.88), rgba(19,16,23,.55) 38%, rgba(19,16,23,.96));
+}
+.colLoading {
+  min-height: 60dvh; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-family: var(--font-display), Georgia, serif; font-size: 1.3rem;
+}
+
+.colBack {
+  position: absolute; top: 18px; left: 22px; z-index: 5;
+  color: var(--muted); text-decoration: none; font-size: .9rem;
+  padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(15,12,20,.6); transition: color .15s ease, border-color .15s ease;
+}
+.colBack:hover { color: var(--gold); border-color: var(--gold); }
+
+.colHeader { text-align: center; }
+.colHeader h1 {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(2rem, 4.6vw, 3rem); letter-spacing: .1em; color: #f3ead9;
+  text-shadow: 0 4px 28px rgba(0,0,0,.8), 0 0 40px rgba(227,164,74,.3);
+}
+.colCount {
+  margin: 4px 0 0; color: var(--gold);
+  font-family: var(--font-display), Georgia, serif; font-size: 1.05rem; letter-spacing: .06em;
+}
+
+/* faction tabs */
+.colTabs { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.colTab {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 8px 18px; border-radius: 999px; border: 1px solid var(--line);
+  background: rgba(22,18,28,.8); color: var(--muted);
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .95rem;
+  transition: color .15s ease, border-color .15s ease, transform .12s ease;
+}
+.colTab:hover { transform: translateY(-1px); color: #eae3d6; }
+.colTab.active {
+  color: #f3ead9; border-color: var(--tabAccent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--tabAccent) 40%, transparent);
+}
+.colTabDot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--tabAccent);
+  opacity: .55; transition: opacity .15s ease;
+}
+.colTab.active .colTabDot { opacity: 1; box-shadow: 0 0 8px var(--tabAccent); }
+
+/* card grid */
+.colGrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 18px; width: min(1240px, 100%); margin: 0 auto;
+}
+.colCard { position: relative; }
+.colCard .cardFace {
+  width: 100%; height: auto; aspect-ratio: 104 / 140;
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+.colCard:not(.notOwned):hover .cardFace {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 26px rgba(0,0,0,.65), 0 0 18px color-mix(in srgb, var(--rarity, #9c93a8) 35%, transparent);
+}
+.colCard.notOwned .cardFace { filter: grayscale(1) brightness(.5); opacity: .75; }
+.colCopies {
+  position: absolute; top: 6px; right: 6px; z-index: 4;
+  padding: 2px 9px; border-radius: 999px;
+  background: linear-gradient(180deg, #ffd98a, #e3a44a 55%, #a86f1f);
+  border: 1px solid #7a4c10; color: #1b1207;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .8rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.55);
+}
+.colMissing {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-8deg); z-index: 4;
+  padding: 4px 10px; border-radius: 6px; white-space: nowrap;
+  background: rgba(15,12,20,.85); border: 1px solid var(--line);
+  color: var(--muted); font-family: var(--font-mono, monospace);
+  font-size: .66rem; letter-spacing: .12em; text-transform: uppercase;
+}
+
+/* decks */
+.colDecks { width: min(760px, 100%); margin: 26px auto 0; display: flex; flex-direction: column; gap: 12px; }
+.colDecks h2 {
+  margin: 0 0 4px; text-align: center; color: #f3ead9;
+  font-family: var(--font-display), Georgia, serif; font-size: 1.5rem; letter-spacing: .08em;
+}
+.colEmpty { text-align: center; color: var(--muted); }
+.colDeck {
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: rgba(22,18,28,.85); transition: border-color .2s ease;
+}
+.colDeck.open, .colDeck:hover { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.colDeckHead {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  padding: 13px 18px; border: 0; background: none; cursor: pointer; text-align: left;
+  color: #eae3d6;
+}
+.colDeckName {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.05rem;
+  color: #f3ead9; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.colDeckSize { color: var(--muted); font-size: .84rem; white-space: nowrap; }
+.colCurve { display: flex; align-items: flex-end; gap: 3px; height: 30px; flex: none; }
+.colCurveBar {
+  width: 7px; border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, #ffd98a, #a86f1f);
+  box-shadow: 0 0 6px rgba(227,164,74,.35);
+}
+.colDeckChevron { color: var(--gold); font-size: .85rem; flex: none; }
+
+.colDeckList {
+  padding: 4px 18px 16px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.colCostGroup ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.colCostLabel {
+  margin: 10px 0 6px; color: var(--muted);
+  font-family: var(--font-mono, monospace); font-size: .68rem;
+  letter-spacing: .14em; text-transform: uppercase;
+}
+.colDeckCard {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-radius: 8px; background: rgba(15,12,20,.6);
+  font-size: .9rem;
+}
+.colDeckCardCost {
+  flex: none; width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 32% 28%, #9ecbff, #2f6fd0 50%, #123a7a);
+  color: #fff; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .78rem;
+  text-shadow: 0 1px 2px rgba(0,0,0,.9);
+}
+.colDeckCardName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.colDeckCardCopies { color: var(--gold); font-family: var(--font-mono, monospace); font-size: .8rem; }
+
+@media (max-width: 560px) {
+  .colGrid { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 12px; }
+  .colDeckHead { flex-wrap: wrap; }
+}
+
+/* ---- card viewer lightbox ---- */
+.colCard { cursor: pointer; }
+.colViewer {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  gap: 26px; background: rgba(8,6,12,.86); animation: colFade .25s ease-out;
+}
+@keyframes colFade { from { opacity: 0; } to { opacity: 1; } }
+.colViewerCard { display: flex; flex-direction: column; align-items: center; gap: 12px; animation: colPop .22s ease-out; }
+@keyframes colPop { from { transform: scale(.92); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+.colViewerMeta {
+  display: flex; gap: 18px; align-items: center; color: #cfc7d6; font-size: .9rem;
+  background: rgba(20,16,26,.9); border: 1px solid #2e2837; border-radius: 999px; padding: 6px 18px;
+}
+.colViewerRarity { text-transform: capitalize; font-weight: 600; }
+.colViewerRarity[data-rarity="common"] { color: #9c93a8; }
+.colViewerRarity[data-rarity="rare"] { color: #4e8ee9; }
+.colViewerRarity[data-rarity="epic"] { color: #a45ae0; }
+.colViewerRarity[data-rarity="legendary"] { color: #e3a44a; }
+.colNav {
+  width: 58px; height: 58px; border-radius: 50%; border: 1px solid #2e2837; cursor: pointer;
+  background: rgba(22,18,28,.9); color: #eae3d6; font-size: 2rem; line-height: 1;
+}
+.colNav:hover:not(:disabled) { border-color: #e3a44a; color: #e3a44a; }
+.colNav:disabled { opacity: .25; cursor: default; }
+.colViewerClose {
+  position: absolute; top: 22px; right: 26px; width: 44px; height: 44px; border-radius: 50%;
+  border: 1px solid #2e2837; background: rgba(22,18,28,.9); color: #9c93a8; font-size: 1.1rem; cursor: pointer;
+}
+.colViewerClose:hover { color: #eae3d6; border-color: #9c93a8; }
+
+/* generated back button */
+.colBack {
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .85rem;
+  text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+}
+.colBack:hover { filter: brightness(1.14); }
+
+/* ---- gallery-grade grid ---- */
+.colGrid { grid-template-columns: repeat(5, 1fr) !important; gap: 22px !important; }
+@media (max-width: 1200px) { .colGrid { grid-template-columns: repeat(4, 1fr) !important; } }
+@media (max-width: 900px) { .colGrid { grid-template-columns: repeat(3, 1fr) !important; } }
+@media (max-width: 620px) { .colGrid { grid-template-columns: repeat(2, 1fr) !important; } }
+.colCard { transition: transform .18s ease, filter .25s ease; animation: colRise .6s cubic-bezier(.2,.7,.2,1) both; }
+.colCard:nth-child(5n+1) { animation-delay: 0ms; }
+.colCard:nth-child(5n+2) { animation-delay: 40ms; }
+.colCard:nth-child(5n+3) { animation-delay: 80ms; }
+.colCard:nth-child(5n+4) { animation-delay: 120ms; }
+.colCard:nth-child(5n+5) { animation-delay: 160ms; }
+@keyframes colRise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+.colCard:hover { transform: translateY(-7px) scale(1.03); z-index: 5; }
+.colCard:hover .framedCard { box-shadow: 0 24px 60px rgba(0,0,0,.7), 0 0 46px rgba(227,164,74,.45); }
+.colCard.notOwned:hover .framedCard { box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+
+/* ---- game-styled deck panels ---- */
+.colDeck {
+  border-style: solid !important; border-color: transparent !important; border-radius: 0 !important;
+  border-image: url("/ui/panel-frame.png") 96 110 fill stretch !important;
+  border-width: 26px 30px !important;
+  background: none !important; box-shadow: none !important;
+  filter: drop-shadow(0 10px 26px rgba(0,0,0,.5));
+}
+.colDeckHead {
+  background: none !important; border: 0 !important;
+  font-family: var(--font-display), Georgia, serif !important;
+}
+.colDeckHead:hover { filter: brightness(1.2); }
+.colDeckName { color: #e9dfc9 !important; letter-spacing: .04em; }
+.colDeckChevron {
+  color: #e3a44a !important; font-size: 1.05rem;
+  transition: transform .2s ease;
+}
+.colDeck.open .colDeckChevron { transform: rotate(0deg); }
+.colCurveBar { background: linear-gradient(180deg, #ffd98a, #a86f1f) !important; }
+
+/* panel frame fit + clickable rows */
+.colDeck {
+  border-image: url("/ui/panel-frame.png") 150 170 fill stretch !important;
+  border-width: 40px 48px !important;
+}
+.colDeckList { padding: 6px 14px 10px !important; }
+.colDeckCard { cursor: pointer; border-radius: 8px; transition: background .15s ease; }
+.colDeckCard:hover { background: rgba(227,164,74,.1); }
+.colDeckCard:hover .colDeckCardName { color: var(--gold); }
+
+.colViewerRarity[data-rarity="mythic"] { color: #ff5c8a; }

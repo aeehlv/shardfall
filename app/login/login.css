@@ -1,0 +1,139 @@
+/* ---- Shardfall login ------------------------------------------------------ */
+
+.loginMain {
+  position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 72px 24px 48px; overflow: hidden;
+}
+
+/* epic backdrop — same pattern as .menuBackdrop */
+.loginBackdrop {
+  position: fixed; inset: 0; z-index: -1; background: var(--ground);
+}
+.loginBackdrop::before {
+  content: ""; position: absolute; inset: 0;
+  background: url("/ui/menu-bg.jpg") center 38% / cover no-repeat;
+  filter: brightness(.3) saturate(.8);
+}
+.loginBackdrop::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(100% 80% at 50% 115%, rgba(19,16,23,.95) 25%, rgba(19,16,23,.3) 75%),
+              linear-gradient(180deg, rgba(19,16,23,.8), rgba(19,16,23,.25) 45%, rgba(19,16,23,.92));
+}
+
+/* generated back button — same pattern as .storeBack */
+.loginBack {
+  position: fixed; top: 14px; left: 18px; z-index: 30;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .85rem;
+  letter-spacing: .06em; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.loginBack:hover { filter: brightness(1.14); }
+
+/* ---- ornate panel ---- */
+.loginPanel {
+  width: min(440px, 94vw);
+  display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill;
+  border-width: 44px 50px; padding: 6px 8px 14px;
+  filter: drop-shadow(0 18px 44px rgba(0,0,0,.6));
+}
+
+.loginTitle {
+  margin: 0; text-align: center;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(1.6rem, 4.5vw, 2.1rem); letter-spacing: .22em; text-transform: uppercase;
+  color: #f3ead9; text-shadow: 0 3px 22px rgba(0,0,0,.85), 0 0 34px rgba(227,164,74,.35);
+}
+.loginSub {
+  margin: -8px 0 0; text-align: center; color: var(--muted);
+  font-size: .84rem; font-style: italic;
+}
+
+.loginPending { margin: 18px 0; text-align: center; color: var(--muted); font-style: italic; }
+
+/* ---- tabs ---- */
+.loginTabs { display: flex; gap: 8px; margin-top: 4px; }
+.loginTab {
+  flex: 1; padding: 9px 10px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(15,12,20,.72); color: var(--muted);
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .88rem;
+  letter-spacing: .05em;
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.loginTab:hover { color: #eae3d6; border-color: var(--muted); }
+.loginTab.active {
+  color: var(--gold); border-color: rgba(227,164,74,.65);
+  background: rgba(227,164,74,.1);
+  box-shadow: inset 0 0 14px rgba(227,164,74,.12), 0 0 12px rgba(227,164,74,.12);
+}
+
+/* ---- form ---- */
+.loginForm { display: flex; flex-direction: column; gap: 12px; }
+
+.loginField { display: flex; flex-direction: column; gap: 5px; }
+.loginField span {
+  font-family: var(--font-display), Georgia, serif; font-size: .74rem; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.loginField input {
+  padding: 10px 12px; border-radius: 8px;
+  background: rgba(12,10,16,.8); border: 1px solid #2e2837; color: #eae3d6;
+  font-size: .95rem; outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.loginField input::placeholder { color: rgba(156,147,168,.55); }
+.loginField input:focus {
+  border-color: rgba(227,164,74,.75);
+  outline: 1px solid rgba(227,164,74,.55); outline-offset: 1px;
+  box-shadow: 0 0 14px rgba(227,164,74,.16);
+}
+
+/* ---- error plaque ---- */
+.authError {
+  margin: 0; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid rgba(224,86,47,.55);
+  background: linear-gradient(180deg, rgba(74,24,14,.7), rgba(46,14,9,.8));
+  color: #f0a189; font-size: .84rem; letter-spacing: .02em; text-align: center;
+  box-shadow: inset 0 0 16px rgba(224,86,47,.14);
+  animation: errorIn .18s ease;
+}
+@keyframes errorIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
+
+/* ---- gold submit (generated 9-slice) ---- */
+.loginSubmit {
+  margin-top: 2px; cursor: pointer;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
+  border-width: 17px 48px; padding: 5px 6px;
+  color: #241505; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: 1rem; letter-spacing: .05em; text-shadow: 0 1px 0 rgba(255,235,180,.45);
+  box-shadow: 0 6px 18px rgba(0,0,0,.5);
+}
+.loginSubmit:hover:not(:disabled) { filter: brightness(1.12); }
+.loginSubmit:active:not(:disabled) { transform: translateY(1px); }
+.loginSubmit:disabled { filter: grayscale(.65) brightness(.7); cursor: default; }
+
+.loginNote { margin: 0; text-align: center; color: rgba(156,147,168,.8); font-size: .78rem; }
+
+/* ---- signed-in state ---- */
+.loginSession { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin-top: 6px; }
+.loginSignedIn {
+  margin: 0; text-align: center; color: #eae3d6; font-size: .95rem;
+  font-family: var(--font-display), Georgia, serif;
+}
+.loginSignedIn b { color: var(--gold); letter-spacing: .03em; }
+
+.loginGhost {
+  text-align: center; cursor: pointer; text-decoration: none;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 16px 44px; padding: 3px 4px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .92rem; letter-spacing: .05em; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+.loginGhost:hover { filter: brightness(1.14); }

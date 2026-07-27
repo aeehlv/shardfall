@@ -1,0 +1,55 @@
+.soundToggle {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 60;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(227, 164, 74, 0.55);
+  background: radial-gradient(circle at 50% 32%, #2a2333, #131017 72%);
+  color: #e3a44a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 18px rgba(227, 164, 74, 0.18);
+  transition: filter 0.15s ease, transform 0.1s ease, border-color 0.15s ease, box-shadow 0.2s ease;
+}
+
+.soundToggle:hover {
+  filter: brightness(1.18);
+  border-color: #e3a44a;
+}
+
+.soundToggle:active {
+  transform: translateY(1px);
+}
+
+.soundToggle:focus-visible {
+  outline: 2px solid #e3a44a;
+  outline-offset: 3px;
+}
+
+.soundGlyph {
+  font-size: 22px;
+  line-height: 1;
+  /* Tint the emoji glyph toward the house gold. */
+  filter: grayscale(1) sepia(1) hue-rotate(-8deg) saturate(3) brightness(1.05);
+}
+
+.soundToggle.isMuted {
+  border-color: rgba(111, 102, 128, 0.5);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.soundToggle.isMuted .soundGlyph {
+  filter: grayscale(1) brightness(0.8);
+  opacity: 0.75;
+}

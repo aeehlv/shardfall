@@ -1,0 +1,194 @@
+/* ---- Shardfall friends ---------------------------------------------------- */
+
+.friendsMain {
+  position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  align-items: center; padding: clamp(24px, 5vh, 48px) 24px 64px; overflow-x: hidden;
+}
+
+/* generated back button (same pattern as the store back) */
+.friendsBack {
+  position: fixed; top: 14px; left: 18px; z-index: 30;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .85rem;
+  letter-spacing: .06em; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.friendsBack:hover { filter: brightness(1.14); }
+
+.friendsHeader { text-align: center; }
+.friendsHeader h1 {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem); letter-spacing: .2em; text-transform: uppercase;
+  color: #f3ead9; text-shadow: 0 4px 28px rgba(0,0,0,.8), 0 0 40px rgba(227,164,74,.35);
+}
+.friendsHeader p { margin: 2px 0 0; color: var(--muted); font-size: .92rem; }
+
+.friendsCol {
+  display: flex; flex-direction: column; gap: clamp(18px, 3vh, 30px);
+  width: min(760px, 94vw); margin-top: clamp(22px, 4vh, 40px);
+}
+
+.friendsLoading {
+  margin-top: 12vh; color: var(--muted); font-family: var(--font-display), Georgia, serif;
+  letter-spacing: .12em; font-size: .95rem; animation: fadePulse 1.6s ease infinite;
+}
+@keyframes fadePulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+
+/* ---- framed panels ---- */
+.fPanel {
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill;
+  border-width: 30px 34px; padding: 8px 12px 14px;
+  filter: drop-shadow(0 14px 34px rgba(0,0,0,.55));
+}
+.fPanel h2 {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 12px;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .95rem;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--gold);
+  text-shadow: 0 0 16px rgba(227,164,74,.35);
+}
+.fPanel h2::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(227,164,74,.5), transparent 85%);
+}
+.fCount {
+  font-family: var(--font-mono, monospace); font-size: .66rem; letter-spacing: .1em;
+  color: #cfc7d6; border: 1px solid rgba(227,164,74,.4); border-radius: 999px;
+  padding: 2px 8px; background: rgba(227,164,74,.08);
+}
+
+/* ---- login required ---- */
+.loginPanel { text-align: center; max-width: 480px; margin-top: 8vh; padding: 20px 30px 26px; }
+.loginPanel h2 { justify-content: center; }
+.loginPanel h2::after { display: none; }
+.loginPanel p { margin: 0 0 18px; color: var(--muted); font-size: .92rem; font-style: italic; }
+
+/* ---- generated game buttons ---- */
+.goldBtn {
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
+  border-width: 15px 42px; padding: 3px 4px; min-width: 128px;
+  color: #241505; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .92rem; letter-spacing: .04em; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 18px rgba(0,0,0,.5); text-shadow: 0 1px 0 rgba(255,235,180,.4);
+}
+.goldBtn:hover:not(:disabled) { filter: brightness(1.12); }
+.goldBtn:active:not(:disabled) { transform: translateY(1px); }
+.goldBtn:disabled { filter: grayscale(.65) brightness(.7); cursor: default; }
+
+.darkBtn {
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px; min-width: 108px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .85rem; letter-spacing: .04em; cursor: pointer; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+.darkBtn:hover:not(:disabled) { filter: brightness(1.14); }
+.darkBtn:active:not(:disabled) { transform: translateY(1px); }
+.darkBtn:disabled { filter: grayscale(.65) brightness(.7); cursor: default; }
+
+.goldBtn.sm { border-width: 12px 34px; min-width: 96px; font-size: .8rem; }
+.darkBtn.sm { border-width: 11px 30px; min-width: 88px; font-size: .78rem; }
+
+/* ---- add friend ---- */
+.addRow { display: flex; gap: 12px; align-items: stretch; }
+.addRow input {
+  flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: rgba(12,10,17,.8); color: var(--ink);
+  font-family: var(--font-display), Georgia, serif; font-size: .95rem; letter-spacing: .04em;
+}
+.addRow input::placeholder { color: #6f6680; font-style: italic; }
+.addRow input:focus {
+  outline: none; border-color: rgba(227,164,74,.55);
+  box-shadow: 0 0 0 2px rgba(227,164,74,.14), 0 0 18px rgba(227,164,74,.12);
+}
+
+.plaque {
+  margin-top: 12px; text-align: center; padding: 8px 14px; border-radius: 10px;
+  font-family: var(--font-display), Georgia, serif; font-size: .9rem; letter-spacing: .05em;
+  animation: plaqueIn .2s ease;
+}
+.plaque.ok { color: #b8e08c; border: 1px solid rgba(140,193,82,.4); background: rgba(140,193,82,.08); }
+.plaque.err { color: #ff8f6e; border: 1px solid rgba(224,86,47,.45); background: rgba(224,86,47,.08); }
+@keyframes plaqueIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+/* ---- rows ---- */
+.fList { display: flex; flex-direction: column; }
+.fRow {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  padding: 11px 6px; border-bottom: 1px solid rgba(46,40,55,.65);
+}
+.fRow:last-child { border-bottom: 0; }
+.fName {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.02rem;
+  color: #f0e8d8; letter-spacing: .03em; text-shadow: 0 1px 4px rgba(0,0,0,.7);
+}
+.botTag {
+  font-family: var(--font-mono, monospace); font-size: .58rem; letter-spacing: .18em;
+  color: #6f6680; border: 1px solid #2e2837; border-radius: 6px; padding: 2px 6px;
+  text-transform: uppercase;
+}
+.fRating { margin-left: auto; color: var(--muted); font-size: .82rem; letter-spacing: .04em; white-space: nowrap; }
+.fRating b { font-family: var(--font-display), Georgia, serif; color: #cfc7d6; font-size: .95rem; }
+.fActions { display: flex; gap: 8px; align-items: center; }
+.fEmpty { padding: 14px 6px; color: var(--muted); font-size: .88rem; font-style: italic; text-align: center; }
+.invitedTag {
+  color: var(--muted); font-family: var(--font-display), Georgia, serif; font-size: .82rem;
+  letter-spacing: .08em; animation: fadePulse 1.8s ease infinite;
+}
+
+/* ---- league badge ---- */
+.leagueBadge {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .66rem;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--lg, var(--muted));
+  border: 1px solid color-mix(in srgb, var(--lg, #9c93a8) 55%, transparent);
+  background: color-mix(in srgb, var(--lg, #9c93a8) 12%, transparent);
+  border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--lg, #9c93a8) 50%, transparent);
+}
+
+/* ---- faction picker popover ---- */
+.factionPick {
+  position: absolute; right: 0; top: calc(100% - 6px); z-index: 8;
+  display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-radius: 12px;
+  background: rgba(20,16,26,.97); border: 1px solid #2e2837;
+  box-shadow: 0 16px 40px rgba(0,0,0,.65); animation: popIn .16s ease-out;
+}
+@keyframes popIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+.pickLabel {
+  font-family: var(--font-mono, monospace); font-size: .62rem; letter-spacing: .12em;
+  text-transform: uppercase; color: #6f6680; padding-right: 4px; white-space: nowrap;
+}
+.factionBtn {
+  border: 1px solid color-mix(in srgb, var(--fc, #e3a44a) 55%, transparent);
+  background: color-mix(in srgb, var(--fc, #e3a44a) 12%, rgba(12,10,17,.9));
+  color: var(--fc, var(--gold));
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .76rem;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 7px 12px; border-radius: 9px; cursor: pointer;
+  transition: filter .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+.factionBtn:hover {
+  filter: brightness(1.25); transform: translateY(-1px);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--fc, #e3a44a) 35%, transparent);
+}
+
+/* ---- identity plate ---- */
+.walletBar .signOutBtn {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--muted); font-size: .78rem; font-family: inherit; letter-spacing: .04em;
+}
+.walletBar .signOutBtn:hover { color: var(--gold); }
+
+@media (max-width: 560px) {
+  .fRow { flex-wrap: wrap; }
+  .fRating { margin-left: 0; }
+  .fActions { margin-left: auto; }
+  .factionPick { flex-wrap: wrap; justify-content: flex-end; }
+}

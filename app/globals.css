@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --ground: #131017;
+  --panel: #1c1823;
+  --line: #2e2837;
+  --ink: #eae3d6;
+  --muted: #9c93a8;
+  --gold: #e3a44a;
+  --pyre: #e0562f;
+  --abyss: #45c4b8;
+  --verdant: #8cc152;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}

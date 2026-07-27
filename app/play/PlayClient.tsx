@@ -1,0 +1,760 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CARD_POOL } from "@/lib/game/pool";
+import { applyAction, getCard, legalAttackTargets, legalEffectTargets, newGame } from "@/lib/game/engine";
+import { aiTakeTurn } from "@/lib/game/ai";
+import { buildStarterDeck } from "@/lib/game/decks";
+import type { ActionResult, FactionId, GameAction, GameEvent, GameState } from "@/lib/game/types";
+import { applyMatchResult, loadProfile, saveProfile } from "@/lib/profile";
+import { fetchMatch, postMatchAction, type MatchView } from "@/lib/online";
+import CardFace from "@/components/play/CardFace";
+import FramedCard from "@/components/play/FramedCard";
+import UnitTile, { type FxNumber } from "@/components/play/UnitTile";
+import TutorialOverlay from "./TutorialOverlay";
+import { play as playSfx, preload as preloadSfx, startMusic } from "@/lib/sound";
+import "./play.css";
+
+const BOARD_BY_ENEMY: Record<string, string> = {
+  pyre: "/board/cinderreach.jpg",
+  abyss: "/board/sunken-antiphon.jpg",
+  verdant: "/board/glasswake.jpg",
+  neutral: "/board/glasswake.jpg",
+};
+const HERO_ART: Record<string, string> = {
+  pyre: "/cards/art/pyre.jpg", abyss: "/cards/art/abyss.jpg",
+  verdant: "/cards/art/verdant.jpg", neutral: "/cards/art/verdant.jpg",
+};
+const FRAMED_FACTIONS = new Set(["pyre", "abyss", "verdant", "neutral"]);
+const TURN_SECONDS = 60;
+const ONLINE_TURN_SECONDS = 75;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let fxKey = 1;
+
+interface EndedInfo {
+  won: boolean; gold: number; xp: number; levelUps: number;
+  ratingDelta?: number; rating?: number; league?: string; pack?: string; firstClear?: boolean;
+}
+
+export default function PlayClient() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const matchId = params.get("match");
+  const online = !!matchId;
+  const playerFaction = (["pyre", "abyss", "verdant"].includes(params.get("deck") ?? "")
+    ? params.get("deck") : "pyre") as FactionId;
+  const tutorial = !online && params.get("tutorial") === "1";
+
+  const offlineEnemy = useMemo<FactionId>(() => {
+    const others = (["pyre", "abyss", "verdant"] as FactionId[]).filter((f) => f !== playerFaction);
+    return tutorial ? others[0] : others[Math.floor(Math.random() * others.length)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [game, setGame] = useState<GameState | null>(null);
+  const [enemyFaction, setEnemyFaction] = useState<FactionId>(offlineEnemy);
+  const [busy, setBusy] = useState(false);
+  const [selCard, setSelCard] = useState<number | null>(null);
+  const [selAttacker, setSelAttacker] = useState<number | null>(null);
+  const [fxMap, setFxMap] = useState<Record<string, FxNumber[]>>({});
+  const [dying, setDying] = useState<Set<number>>(new Set());
+  const [reveal, setReveal] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [ended, setEnded] = useState<EndedInfo | null>(null);
+  const [zoomCard, setZoomCard] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [tutStep, setTutStep] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(TURN_SECONDS);
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [oppInfo, setOppInfo] = useState<MatchView["opponent"]>(null);
+  const [drag, setDrag] = useState<{ index: number; x: number; y: number } | null>(null);
+  const [bursts, setBursts] = useState<{ key: number; x: number; y: number }[]>([]);
+  const [spawning, setSpawning] = useState<Set<number>>(new Set());
+  const [sprites, setSprites] = useState<{ key: number; kind: string; x: number; y: number; s: number }[]>([]);
+  const [bolts, setBolts] = useState<{ key: number; x: number; y: number; dx: number; dy: number; hue: string }[]>([]);
+  const [concedeArmed, setConcedeArmed] = useState(false);
+
+  const unitRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const handRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const arrowRef = useRef<SVGPathElement | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const endedRef = useRef(false);
+  const dragStart = useRef<{ index: number; x: number; y: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const seqRef = useRef(-1);
+  const pollingRef = useRef(false);
+
+  const pushFx = useCallback((key: string, fx: FxNumber) => {
+    setFxMap((m) => ({ ...m, [key]: [...(m[key] ?? []), fx] }));
+    setTimeout(() => {
+      setFxMap((m) => ({ ...m, [key]: (m[key] ?? []).filter((f) => f.key !== fx.key) }));
+    }, 900);
+  }, []);
+
+  const spawnSprite = useCallback((kind: string, x: number, y: number, size = 130, life = 750) => {
+    const key = fxKey++;
+    setSprites((sp) => [...sp, { key, kind, x, y, s: size }]);
+    setTimeout(() => setSprites((sp) => sp.filter((f) => f.key !== key)), life);
+  }, []);
+
+  const rectCenter = (el: Element | null | undefined): { x: number; y: number } | null => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
+
+  const targetPoint = useCallback((targetUid?: number, player?: 0 | 1): { x: number; y: number } | null => {
+    if (targetUid !== undefined) return rectCenter(unitRefs.current.get(targetUid));
+    if (player !== undefined) {
+      return rectCenter(boardRef.current?.querySelector(
+        player === 0 ? ".heroCorner.mine" : ".heroCorner.foe"));
+    }
+    return null;
+  }, []);
+
+  const fireBolt = useCallback(async (from: { x: number; y: number }, to: { x: number; y: number }, hue: string) => {
+    const key = fxKey++;
+    setBolts((b) => [...b, { key, x: from.x, y: from.y, dx: to.x - from.x, dy: to.y - from.y, hue }]);
+    await sleep(340);
+    setBolts((b) => b.filter((x) => x.key !== key));
+  }, []);
+
+  const finishOffline = useCallback(async (won: boolean) => {
+    if (endedRef.current) return;
+    endedRef.current = true;
+    const profile = loadProfile();
+    const reward = applyMatchResult(profile, won);
+    saveProfile(profile);
+    playSfx(won ? "victory" : "defeat", 0.55);
+    await sleep(400);
+    setEnded({ won, ...reward });
+  }, []);
+
+  const animate = useCallback(async (r: { state: GameState; events: GameEvent[] }, aiSide: boolean) => {
+    let spellFrom: { x: number; y: number } | null = null;
+    for (const ev of r.events) {
+      switch (ev.type) {
+        case "CARD_PLAYED":
+          if ((aiSide || ev.player === 1) && ev.cardId) {
+            setReveal(ev.cardId); await sleep(1000); setReveal(null);
+          }
+          break;
+        case "SPELL_CAST": {
+          playSfx("spell", 0.5);
+          spellFrom = rectCenter(boardRef.current?.querySelector(
+            ev.player === 0 ? ".heroCorner.mine" : ".heroCorner.foe"));
+          break;
+        }
+        case "UNIT_SUMMONED": {
+          playSfx("card-play", 0.5);
+          const uid = ev.uid;
+          setSpawning((sp) => new Set(sp).add(uid));
+          setTimeout(() => setSpawning((sp) => { const n = new Set(sp); n.delete(uid); return n; }), 520);
+          await sleep(140);
+          break;
+        }
+        case "ATTACK": {
+          const el = unitRefs.current.get(ev.attackerUid);
+          if (el) {
+            let dx = 0, dy = ev.player === 0 ? -70 : 70;
+            const tEl = ev.targetUid !== undefined ? unitRefs.current.get(ev.targetUid) : null;
+            if (tEl) {
+              const a = el.getBoundingClientRect();
+              const b = tEl.getBoundingClientRect();
+              dx = (b.left - a.left) * 0.98; dy = (b.top - a.top) * 0.98;
+            }
+            el.style.setProperty("--lx", `${dx}px`);
+            el.style.setProperty("--ly", `${dy}px`);
+            el.classList.add("lunging");
+            await sleep(340);
+            el.classList.remove("lunging");
+          }
+          const hit = ev.targetUid !== undefined
+            ? unitRefs.current.get(ev.targetUid)
+            : boardRef.current?.querySelector<HTMLElement>(
+                ev.player === 0 ? ".heroCorner.foe" : ".heroCorner.mine");
+          if (hit) {
+            playSfx("attack", 0.55);
+            hit.classList.add("hitShake");
+            setTimeout(() => hit.classList.remove("hitShake"), 420);
+            const c = rectCenter(hit);
+            if (c) spawnSprite("slash", c.x, c.y, 150, 600);
+          }
+          break;
+        }
+        case "DAMAGE": {
+          const pt = targetPoint(ev.targetUid, ev.player);
+          if (spellFrom && pt) {
+            await fireBolt(spellFrom, pt, "#a45ae0");
+            spawnSprite("curse", pt.x, pt.y, 140, 650);
+            spellFrom = null;
+          }
+          if (ev.targetUid !== undefined) pushFx(String(ev.targetUid), { key: fxKey++, text: `-${ev.amount}`, kind: "damage" });
+          else if (ev.player !== undefined) pushFx(`hero${ev.player}`, { key: fxKey++, text: `-${ev.amount}`, kind: "damage" });
+          await sleep(210);
+          break;
+        }
+        case "HEAL": {
+          const pt = targetPoint(ev.targetUid, ev.player);
+          if (spellFrom && pt) { await fireBolt(spellFrom, pt, "#8cc152"); spellFrom = null; }
+          if (pt) { spawnSprite("heal", pt.x, pt.y, 130, 750); playSfx("heal", 0.45); }
+          if (ev.targetUid !== undefined) pushFx(String(ev.targetUid), { key: fxKey++, text: `+${ev.amount}`, kind: "heal" });
+          else if (ev.player !== undefined) pushFx(`hero${ev.player}`, { key: fxKey++, text: `+${ev.amount}`, kind: "heal" });
+          await sleep(160);
+          break;
+        }
+        case "BUFF": {
+          const pt = targetPoint(ev.targetUid);
+          if (spellFrom && pt) { await fireBolt(spellFrom, pt, "#e3a44a"); spellFrom = null; }
+          if (pt) { spawnSprite("buff", pt.x, pt.y, 120, 650); playSfx("buff", 0.4); }
+          pushFx(String(ev.targetUid), { key: fxKey++, text: `+${ev.attack}/+${ev.health}`, kind: "buff" });
+          await sleep(140);
+          break;
+        }
+        case "DEATH": {
+          const pt = rectCenter(unitRefs.current.get(ev.uid));
+          playSfx("shatter", 0.5);
+          if (pt) spawnSprite("shatter", pt.x, pt.y, 165, 700);
+          setDying((s) => new Set(s).add(ev.uid));
+          await sleep(320);
+          break;
+        }
+        case "RETURNED":
+          setDying((s) => new Set(s).add(ev.uid));
+          await sleep(300);
+          break;
+        case "IGNITE": {
+          const el = unitRefs.current.get(ev.uid);
+          el?.classList.add("igniting");
+          const pt = rectCenter(el);
+          if (pt) spawnSprite("fire", pt.x, pt.y, 120, 600);
+          await sleep(280);
+          el?.classList.remove("igniting");
+          break;
+        }
+        case "TURN_START":
+          if (ev.player === 0) playSfx("turn", 0.4);
+          setBanner(ev.player === 0 ? "Your Turn" : "Enemy Turn");
+          setTimeout(() => setBanner(null), 1100);
+          await sleep(320);
+          break;
+        case "GAME_OVER":
+          break;
+      }
+    }
+    setDying(new Set());
+    setGame(r.state);
+    if (!online && r.state.winner !== null) await finishOffline(r.state.winner === 0);
+  }, [pushFx, finishOffline, online, spawnSprite, targetPoint, fireBolt]);
+
+  /** Online: absorb a server view — animate its events, sync state/seq/deadline/rewards. */
+  const absorbView = useCallback(async (view: MatchView) => {
+    if (view.error) { setToast(view.error); setTimeout(() => setToast(null), 1600); return; }
+    seqRef.current = view.seq;
+    setDeadline(view.turnDeadline);
+    if (view.opponent) setOppInfo(view.opponent);
+    await animate({ state: view.state, events: view.events }, false);
+    if (view.rewards && !endedRef.current) {
+      endedRef.current = true;
+      playSfx((view.rewards as EndedInfo).won ? "victory" : "defeat", 0.55);
+      await sleep(400);
+      setEnded(view.rewards as EndedInfo);
+    }
+  }, [animate]);
+
+  // ---- init -----------------------------------------------------------------
+  useEffect(() => {
+    preloadSfx(["click", "card-play", "attack", "shatter", "heal", "buff", "spell", "turn", "match-start", "victory", "defeat"]);
+    playSfx("match-start", 0.5);
+    startMusic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (online && matchId) {
+      void (async () => {
+        const view = await fetchMatch(matchId, -1);
+        if (view.error) { setToast(view.error); setTimeout(() => router.push("/"), 1500); return; }
+        setEnemyFaction((view.state.players[1].hero as FactionId) ?? "verdant");
+        await absorbView(view);
+        setBanner(view.state.active === 0 ? "Your Turn" : "Enemy Turn");
+        setTimeout(() => setBanner(null), 1200);
+      })();
+      return;
+    }
+    const seed = tutorial ? 12345 : (Date.now() % 2147483647);
+    const g = newGame(
+      buildStarterDeck(CARD_POOL, playerFaction),
+      buildStarterDeck(CARD_POOL, offlineEnemy),
+      seed, playerFaction, offlineEnemy,
+    );
+    setGame(g);
+    setBanner("Your Turn");
+    setTimeout(() => setBanner(null), 1200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const runAiTurn = useCallback(async (state: GameState) => {
+    const steps = aiTakeTurn(state);
+    let cur = state;
+    for (const step of steps) {
+      await sleep(520);
+      await animate(step.result, true);
+      cur = step.result.state;
+      if (cur.winner !== null) return;
+    }
+  }, [animate]);
+
+  const doPlayerAction = useCallback(async (action: GameAction) => {
+    if (!game || busy || game.winner !== null || game.active !== 0 || endedRef.current) return;
+    setSelCard(null); setSelAttacker(null);
+    if (online && matchId) {
+      setBusy(true);
+      const view = await postMatchAction(matchId, { action, since: seqRef.current });
+      if (view.error) {
+        setToast(view.error); setTimeout(() => setToast(null), 1500);
+      } else {
+        await absorbView(view);
+      }
+      setBusy(false);
+      return;
+    }
+    const r = applyAction(game, action);
+    if (r.error) { setToast(r.error); setTimeout(() => setToast(null), 1500); return; }
+    setBusy(true);
+    await animate(r, false);
+    if (action.type === "END_TURN" && r.state.winner === null) {
+      await runAiTurn(r.state);
+      setTimeLeft(TURN_SECONDS);
+    }
+    setBusy(false);
+  }, [game, busy, animate, runAiTurn, online, matchId, absorbView]);
+
+  // ---- online polling -------------------------------------------------------
+  useEffect(() => {
+    if (!online || !matchId || ended) return;
+    const iv = setInterval(async () => {
+      if (pollingRef.current || busy) return;
+      pollingRef.current = true;
+      try {
+        const view = await fetchMatch(matchId, seqRef.current);
+        if (!view.error && (view.events.length > 0 || view.seq > seqRef.current || view.rewards)) {
+          await absorbView(view);
+        } else if (!view.error) {
+          setDeadline(view.turnDeadline);
+        }
+      } finally {
+        pollingRef.current = false;
+      }
+    }, 2500);
+    return () => clearInterval(iv);
+  }, [online, matchId, ended, busy, absorbView]);
+
+  // ---- turn timer -----------------------------------------------------------
+  const myTurn = !!game && game.active === 0 && !busy && game.winner === null && !ended;
+  useEffect(() => {
+    if (tutorial) return;
+    if (online) {
+      const iv = setInterval(() => {
+        if (deadline) setTimeLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+      }, 500);
+      return () => clearInterval(iv);
+    }
+    if (!myTurn) return;
+    const iv = setInterval(() => setTimeLeft((t) => Math.max(0, t - 1)), 1000);
+    return () => clearInterval(iv);
+  }, [myTurn, tutorial, online, deadline]);
+  useEffect(() => {
+    if (!online && timeLeft === 0 && myTurn && !tutorial) {
+      setSelCard(null); setSelAttacker(null);
+      void doPlayerAction({ type: "END_TURN" });
+      setTimeLeft(TURN_SECONDS);
+    }
+  }, [timeLeft, myTurn, tutorial, doPlayerAction, online]);
+
+  // ---- targeting arrow ------------------------------------------------------
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const line = arrowRef.current;
+      const board = boardRef.current;
+      if (!line || !board) return;
+      const src = selAttacker !== null
+        ? unitRefs.current.get(selAttacker)
+        : selCard !== null ? handRefs.current.get(selCard) : null;
+      const from = src?.getBoundingClientRect();
+      const b = board.getBoundingClientRect();
+      const x2 = e.clientX - b.left;
+      const y2 = e.clientY - b.top;
+      const x1 = from ? from.left + from.width / 2 - b.left : x2;
+      const y1 = from ? from.top + from.height / 3 - b.top : y2 + 120;
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const dist = Math.hypot(dx, dy) || 1;
+      // bow perpendicular to travel, scaled by distance, always to the same side
+      const bow = Math.min(120, 30 + dist * 0.22);
+      const nx = -dy / dist;
+      const ny = dx / dist;
+      const side = dx >= 0 ? 1 : -1;
+      const cx = (x1 + x2) / 2 + nx * bow * side;
+      const cy = (y1 + y2) / 2 + ny * bow * side;
+      line.setAttribute("d", `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`);
+      const ret = board.querySelector(".targetReticle");
+      if (ret) { ret.setAttribute("cx", String(x2)); ret.setAttribute("cy", String(y2)); }
+    };
+    if (selAttacker !== null || selCard !== null) {
+      window.addEventListener("mousemove", onMove);
+      return () => window.removeEventListener("mousemove", onMove);
+    }
+  }, [selAttacker, selCard]);
+
+  // ---- cancel targeting -----------------------------------------------------
+  useEffect(() => {
+    const cancel = () => { setSelCard(null); setSelAttacker(null); };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && cancel();
+    const onCtx = (e: MouseEvent) => {
+      if (selCard !== null || selAttacker !== null) { e.preventDefault(); cancel(); }
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("contextmenu", onCtx);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("contextmenu", onCtx); };
+  }, [selCard, selAttacker]);
+
+  // ---- drag to play ---------------------------------------------------------
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const st = dragStart.current;
+      if (!st) return;
+      if (!st.moved && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 10) st.moved = true;
+      if (st.moved) setDrag({ index: st.index, x: e.clientX, y: e.clientY });
+    };
+    const onUp = (e: PointerEvent) => {
+      const st = dragStart.current;
+      dragStart.current = null;
+      if (!st) return;
+      if (!st.moved) { setDrag(null); return; }
+      suppressClick.current = true;
+      setTimeout(() => { suppressClick.current = false; }, 250);
+      setDrag(null);
+      const h = window.innerHeight;
+      const droppedOnField = e.clientY > h * 0.12 && e.clientY < h * 0.74;
+      if (!droppedOnField || !game) return;
+      const cardId = game.players[0].hand[st.index];
+      if (cardId === undefined) return;
+      const card = getCard(cardId);
+      if (card.cost > game.players[0].mana) { setToast("Not enough aether"); setTimeout(() => setToast(null), 1200); return; }
+      const eff = card.type === "unit" ? card.arrival : card.spell;
+      const needsTarget = (eff?.target ?? "NONE") !== "NONE" && legalEffectTargets(game, 0, eff).length > 0;
+      if (needsTarget) {
+        setSelAttacker(null); setSelCard(st.index);
+      } else {
+        const key = fxKey++;
+        setBursts((b) => [...b, { key, x: e.clientX, y: e.clientY }]);
+        setTimeout(() => setBursts((b) => b.filter((x) => x.key !== key)), 700);
+        void doPlayerAction({ type: "PLAY_CARD", handIndex: st.index });
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+  }, [game, doPlayerAction]);
+
+  if (!game) return <div className="playLoading">Entering Kelvarrow…</div>;
+
+  const me = game.players[0];
+  const foe = game.players[1];
+  const turnMax = online ? ONLINE_TURN_SECONDS : TURN_SECONDS;
+
+  const cardNeedsTarget = (handIndex: number): boolean => {
+    const card = getCard(me.hand[handIndex]);
+    const eff = card.type === "unit" ? card.arrival : card.spell;
+    if ((eff?.target ?? "NONE") === "NONE") return false;
+    return legalEffectTargets(game, 0, eff).length > 0;
+  };
+  const legalCardTargets: number[] = selCard !== null
+    ? legalEffectTargets(game, 0, (() => { const c = getCard(me.hand[selCard]); return c.type === "unit" ? c.arrival : c.spell; })())
+    : [];
+  const attackTargets = selAttacker !== null ? legalAttackTargets(game, selAttacker) : [];
+
+  const clickHandCard = (i: number) => {
+    if (!myTurn || suppressClick.current) return;
+    const card = getCard(me.hand[i]);
+    if (card.cost > me.mana) { setToast("Not enough aether"); setTimeout(() => setToast(null), 1200); return; }
+    if (cardNeedsTarget(i)) { setSelAttacker(null); setSelCard(selCard === i ? null : i); }
+    else void doPlayerAction({ type: "PLAY_CARD", handIndex: i });
+  };
+  const clickMyUnit = (uid: number) => {
+    if (!myTurn) return;
+    if (selCard !== null && legalCardTargets.includes(uid)) {
+      void doPlayerAction({ type: "PLAY_CARD", handIndex: selCard, targetUid: uid });
+      return;
+    }
+    if (legalAttackTargets(game, uid).length > 0) { setSelCard(null); setSelAttacker(selAttacker === uid ? null : uid); }
+  };
+  const clickEnemyUnit = (uid: number) => {
+    if (!myTurn) return;
+    if (selCard !== null && legalCardTargets.includes(uid)) {
+      void doPlayerAction({ type: "PLAY_CARD", handIndex: selCard, targetUid: uid });
+    } else if (selAttacker !== null && attackTargets.includes(uid)) {
+      void doPlayerAction({ type: "ATTACK", attackerUid: selAttacker, targetUid: uid });
+    }
+  };
+  const clickEnemyHero = () => {
+    if (!myTurn) return;
+    if (selAttacker !== null && attackTargets.includes(undefined)) {
+      void doPlayerAction({ type: "ATTACK", attackerUid: selAttacker });
+    }
+  };
+  const concede = () => {
+    if (tutorial) { router.push("/"); return; }
+    if (!concedeArmed) { setConcedeArmed(true); setTimeout(() => setConcedeArmed(false), 3000); return; }
+    if (online && matchId) {
+      void (async () => {
+        const view = await postMatchAction(matchId, { resign: true, since: seqRef.current });
+        await absorbView(view);
+      })();
+    } else {
+      void finishOffline(false);
+    }
+  };
+
+  const refCb = (uid: number) => (el: HTMLDivElement | null) => {
+    if (el) unitRefs.current.set(uid, el);
+    else unitRefs.current.delete(uid);
+  };
+
+  const manaFrac = me.manaMax > 0 ? me.mana / me.manaMax : 0;
+  const RING_R = 50;
+  const RING_C = 2 * Math.PI * RING_R;
+  const zoomDef = zoomCard && zoomCard.id !== "hidden" ? getCard(zoomCard.id) : null;
+  const revealDef = reveal ? getCard(reveal) : null;
+
+  /* eslint-disable @next/next/no-img-element */
+  return (
+    <main className="playMain" ref={boardRef}
+      style={{ backgroundImage: `url(${BOARD_BY_ENEMY[enemyFaction]})` }}>
+      <div className="boardVeil" />
+
+      {/* enemy top bar + corner avatar */}
+      <div className="heroRow top">
+        <div className="enemyHand">
+          {foe.hand.map((_, i) => <div key={i} className="enemyCardBack" style={{ transform: `rotate(${(i - foe.hand.length / 2) * 4}deg)` }} />)}
+        </div>
+        {oppInfo && (
+          <div className="oppTag" data-testid="opp-tag">
+            <b>{oppInfo.name}</b>
+            <span className={`leagueBadge l-${oppInfo.league}`}>
+              <img className="leagueCrestSm" src={`/ui/leagues/${oppInfo.league.toLowerCase()}.png`} alt="" />
+              {oppInfo.league} · {oppInfo.rating}
+            </span>
+          </div>
+        )}
+        <button className={`concedeBtn${concedeArmed ? " armed" : ""}`} data-testid="concede" onClick={concede}>
+          {tutorial ? "Leave Tutorial" : concedeArmed ? "Concede?" : "Concede"}
+        </button>
+      </div>
+      <div className={`heroCorner foe heroPanel${selAttacker !== null && attackTargets.includes(undefined) ? " legalTarget" : ""}`}
+        onClick={clickEnemyHero}>
+        <div className="footGlow foeGlow" aria-hidden="true" />
+        <img className="heroFigure flip" src={`/board/avatars/${foe.hero}.png`} alt="Enemy champion" />
+        <div className="heroPlate foePlate"><div className="heroHp">{foe.hp}</div></div>
+        <div className="heroFx">{(fxMap["hero1"] ?? []).map((f) => <span key={f.key} className={`fxNum ${f.kind}`}>{f.text}</span>)}</div>
+      </div>
+
+      {/* battlefield */}
+      <div className="field">
+        <div className="boardRow enemy">
+          {foe.board.map((u) => (
+            <UnitTile key={u.uid} unit={u} refCb={refCb(u.uid)}
+              legalTarget={(selCard !== null && legalCardTargets.includes(u.uid)) || (selAttacker !== null && attackTargets.includes(u.uid))}
+              dying={dying.has(u.uid)}
+              spawning={spawning.has(u.uid)}
+              onHover={(id, el) => setZoomCard(id && el ? { id, ...rectCenter(el)! } : null)}
+              onClick={() => clickEnemyUnit(u.uid)}
+              fx={fxMap[String(u.uid)]}
+            />
+          ))}
+        </div>
+        <div className="fieldDivider" />
+        <div className={`boardRow mine${drag ? " dropHint" : ""}`}>
+          {me.board.map((u) => (
+            <UnitTile key={u.uid} unit={u} refCb={refCb(u.uid)}
+              ready={myTurn && legalAttackTargets(game, u.uid).length > 0}
+              selected={selAttacker === u.uid}
+              legalTarget={selCard !== null && legalCardTargets.includes(u.uid)}
+              dying={dying.has(u.uid)}
+              spawning={spawning.has(u.uid)}
+              resting={myTurn && legalAttackTargets(game, u.uid).length === 0 &&
+                (u.attacksLeft <= 0 || (u.enteredTurn === game.turn && !u.keywords.includes("rush")))}
+              onHover={(id, el) => setZoomCard(id && el ? { id, ...rectCenter(el)! } : null)}
+              onClick={() => clickMyUnit(u.uid)}
+              fx={fxMap[String(u.uid)]}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* my corner avatar */}
+      <div className="heroCorner mine heroPanel" data-testid="my-hero">
+        <div className="footGlow" aria-hidden="true" />
+        <img className="heroFigure" src={`/board/avatars/${me.hero}.png`} alt="Your champion" />
+        <div className="heroPlate">
+          <div className="heroHp">{me.hp}</div>
+          <div className="manaPips" title={`${me.mana}/${me.manaMax} aether`}>
+            {Array.from({ length: Math.max(me.manaMax, 1) }).map((_, i) => (
+              <span key={i} className={`pip${i < me.mana ? " on" : ""}`} />
+            ))}
+            <b key={`${me.mana}-${game.turn}`}>{me.mana}/{me.manaMax}</b>
+          </div>
+        </div>
+        <div className="heroFx">{(fxMap["hero0"] ?? []).map((f) => <span key={f.key} className={`fxNum ${f.kind}`}>{f.text}</span>)}</div>
+      </div>
+
+      {/* my hand row */}
+      <div className="heroRow bottom">
+        <div className="hand">
+          {me.hand.map((id, i) => {
+            const card = getCard(id);
+            return (
+              <div key={`${id}-${i}`}
+                ref={(el) => { if (el) handRefs.current.set(i, el); else handRefs.current.delete(i); }}
+                className={`handSlot${selCard === i ? " selectedCard" : ""}${drag?.index === i ? " dragging" : ""}`}
+                onMouseEnter={(e) => setZoomCard({ id, ...rectCenter(e.currentTarget)! })}
+                onMouseLeave={() => setZoomCard(null)}
+                onPointerDown={(e) => {
+                  if (!myTurn) return;
+                  dragStart.current = { index: i, x: e.clientX, y: e.clientY, moved: false };
+                }}
+                onClick={() => clickHandCard(i)}>
+                <CardFace card={card} variant="hand" playable={myTurn && card.cost <= me.mana} />
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="sidePanel">
+          {!tutorial && (
+            <div className={`timerRow${timeLeft <= 10 && myTurn ? " urgent" : ""}`} data-testid="turn-timer">
+              <span className="timerText">
+                {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
+              </span>
+              <span className="timerBar">
+                <span className="timerFill" style={{ width: `${Math.min(100, (timeLeft / turnMax) * 100)}%` }} />
+              </span>
+            </div>
+          )}
+          <button className="endTurnBtn" data-testid="end-turn" disabled={!myTurn}
+            onClick={() => void doPlayerAction({ type: "END_TURN" })}>
+            {busy ? "…" : myTurn ? "End Turn" : "Enemy Turn"}
+          </button>
+        </div>
+      </div>
+
+      {/* dragged card ghost */}
+      {drag && (
+        <div className="dragGhost" style={{ left: drag.x, top: drag.y }}>
+          <CardFace card={getCard(me.hand[drag.index])} variant="hand" />
+        </div>
+      )}
+      {bursts.map((b) => (
+        <div key={b.key} className="dropBurst" style={{ left: b.x, top: b.y }} />
+      ))}
+      {sprites.map((f) => (
+        <img key={f.key} src={`/fx/${f.kind}.jpg`} alt="" className={`fxSprite fx-${f.kind}`}
+          style={{ left: f.x, top: f.y, width: f.s, height: f.s }} />
+      ))}
+      {bolts.map((b) => (
+        <span key={b.key} className="fxBolt"
+          style={{ left: b.x, top: b.y, "--bx": `${b.dx}px`, "--by": `${b.dy}px`, "--hue": b.hue } as React.CSSProperties} />
+      ))}
+
+      {/* targeting arrow */}
+      {(selAttacker !== null || selCard !== null) && (
+        <svg className="targetArrow">
+          <defs>
+            <marker id="arrowHead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="#e3a44a" />
+            </marker>
+          </defs>
+          <path ref={arrowRef} className="targetArrowPath" d="M 0 0" markerEnd="url(#arrowHead)" />
+          <circle className="targetReticle" cx="-40" cy="-40" r="17" />
+        </svg>
+      )}
+
+      {/* hover popup over the card */}
+      {zoomCard && zoomDef && !busy && !drag && (
+        <div className="zoomPop" style={{
+          left: Math.min(Math.max(zoomCard.x, 170), (typeof window !== "undefined" ? window.innerWidth : 1500) - 170),
+          top: zoomCard.y < 480 ? zoomCard.y + 90 : zoomCard.y - 90,
+          transform: zoomCard.y < 480 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
+        }}>
+          {FRAMED_FACTIONS.has(zoomDef.faction)
+            ? <FramedCard card={zoomDef} width={300} />
+            : <div className="zoomFallback"><CardFace card={zoomDef} /></div>}
+        </div>
+      )}
+
+      {/* opponent card reveal */}
+      {reveal && revealDef && (
+        <div className="revealWrap">
+          {FRAMED_FACTIONS.has(revealDef.faction)
+            ? <FramedCard card={revealDef} width={320} />
+            : <div className="zoomFallback"><CardFace card={revealDef} /></div>}
+        </div>
+      )}
+
+      {/* big center countdown for the last 10 seconds */}
+      {myTurn && !tutorial && timeLeft <= 10 && timeLeft > 0 && (
+        <div className="bigCountdown" key={timeLeft}>{timeLeft}</div>
+      )}
+
+      {banner && <div className="turnBanner">{banner}</div>}
+      {toast && (
+        <div className="playToast">
+          <img src="/ui/mana.png" alt="" />
+          <span>{toast}</span>
+        </div>
+      )}
+
+      {tutorial && game.winner === null && !ended && (
+        <TutorialOverlay game={game} step={tutStep} setStep={setTutStep} myTurn={myTurn} />
+      )}
+
+      {ended && (
+        <div className="endOverlay" data-testid="end-overlay">
+          <div className="endCardPanel">
+            <h1 className={ended.won ? "vic" : "def"}>{ended.won ? "Victory" : "Defeat"}</h1>
+            <p className="endRewards">
+              +{ended.gold} <img src="/ui/gold.png" alt="gold" /> · +{ended.xp} XP
+              {ended.levelUps > 0 && <span className="levelUp"> · Level up! +{ended.levelUps} pack</span>}
+            </p>
+            {ended.ratingDelta !== undefined && (
+              <p className={`endRating ${ended.ratingDelta >= 0 ? "up" : "down"}`} data-testid="rating-delta">
+                {ended.ratingDelta >= 0 ? "▲" : "▼"} {Math.abs(ended.ratingDelta)} rating
+                · {ended.rating}{" "}
+                <span className={`leagueBadge l-${ended.league}`}>
+                  <img className="leagueCrestSm" src={`/ui/leagues/${(ended.league ?? "bronze").toLowerCase()}.png`} alt="" />
+                  {ended.league}
+                </span>
+              </p>
+            )}
+            {ended.pack && (
+              <p className="endPackDrop" data-testid="pack-drop">
+                {ended.firstClear ? "First clear!" : ""} +1 {ended.pack} pack
+                <img src={`/store/pack-${ended.pack}.png`} alt="" />
+              </p>
+            )}
+            <div className="endBtns">
+              {!online && <button className="btn primary" onClick={() => window.location.reload()}>Play Again</button>}
+              {online && ended.ratingDelta !== undefined && (
+                <button className="btn primary" onClick={() => router.push("/?queue=1")}>Queue Again</button>
+              )}
+              <button className="btn" onClick={() => router.push("/")}>Main Menu</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+  /* eslint-enable @next/next/no-img-element */
+}

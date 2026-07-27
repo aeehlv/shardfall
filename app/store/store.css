@@ -1,0 +1,323 @@
+/* ---- Shardfall store ------------------------------------------------------ */
+
+.storeMain {
+  position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  align-items: center; padding: clamp(24px, 5vh, 48px) 24px 64px; overflow-x: hidden;
+}
+
+.storeBack {
+  position: fixed; top: 14px; left: 18px; z-index: 30;
+  padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(15,12,20,.72); color: var(--muted); text-decoration: none;
+  font-family: var(--font-display), Georgia, serif; font-size: .9rem; letter-spacing: .06em;
+  transition: color .15s ease, border-color .15s ease;
+}
+.storeBack:hover { color: var(--gold); border-color: rgba(227,164,74,.6); }
+
+.storeHeader { text-align: center; }
+.storeHeader h1 {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3rem); letter-spacing: .2em; text-transform: uppercase;
+  color: #f3ead9; text-shadow: 0 4px 28px rgba(0,0,0,.8), 0 0 40px rgba(227,164,74,.35);
+}
+.storeHeader p { margin: 2px 0 0; color: var(--muted); font-size: .92rem; }
+
+.storeWallet { margin-top: 16px; }
+
+/* ---- sections ---- */
+.storeSection { width: min(980px, 94vw); margin-top: clamp(28px, 5vh, 46px); }
+.storeSection h2 {
+  display: flex; align-items: center; gap: 14px; margin: 0 0 16px;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.05rem;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--gold);
+}
+.storeSection h2::before {
+  content: ""; width: 26px; height: 1px;
+  background: linear-gradient(270deg, rgba(227,164,74,.7), transparent);
+}
+.storeSection h2::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(227,164,74,.55), transparent 80%);
+}
+
+/* ---- buy button (gold, game-like) ---- */
+.buyBtn {
+  padding: 10px 18px; border-radius: 10px; border: 1px solid #7a4c10;
+  background: linear-gradient(180deg, #ffd98a, #e3a44a 55%, #a86f1f); color: #1b1207;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .95rem;
+  letter-spacing: .04em; cursor: pointer;
+  transition: transform .12s ease, filter .15s ease, box-shadow .15s ease;
+}
+.buyBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(227,164,74,.35); }
+.buyBtn:active:not(:disabled) { transform: translateY(1px); }
+.buyBtn:disabled {
+  background: linear-gradient(180deg, #3b3547, #2a2534); color: #7d7489;
+  border-color: var(--line); cursor: default;
+}
+.buyBtn.shake { animation: storeShake .5s ease; }
+@keyframes storeShake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-5px); }
+  40%, 60% { transform: translateX(5px); }
+}
+
+.denyMsg {
+  color: #e0562f; font-size: .8rem; text-align: center; letter-spacing: .04em;
+  animation: denyIn .18s ease;
+}
+@keyframes denyIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
+
+.priceRow {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.1rem;
+  color: var(--gold);
+}
+.priceRow img { width: 20px; height: 20px; object-fit: contain; }
+
+/* ---- pack shop ---- */
+.packGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+.packCard {
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(28,23,36,.92), rgba(19,16,23,.95));
+  box-shadow: 0 8px 22px rgba(0,0,0,.4);
+  transition: transform .18s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.packCard:hover {
+  transform: translateY(-6px); border-color: rgba(227,164,74,.55);
+  box-shadow: 0 18px 36px rgba(0,0,0,.55), 0 0 26px rgba(227,164,74,.14);
+}
+.packArt { height: 190px; overflow: hidden; border-bottom: 1px solid var(--line); }
+.packArt img {
+  width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease;
+}
+.packCard:hover .packArt img { transform: scale(1.05); }
+.packBody { display: flex; flex-direction: column; gap: 9px; padding: 14px 16px 18px; }
+.packName {
+  font-family: var(--font-display), Georgia, serif; font-size: 1.08rem; color: #f0e8d8;
+  letter-spacing: .05em; text-align: center;
+}
+.packMeta { color: var(--muted); font-size: .8rem; text-align: center; }
+
+/* ---- featured singles ---- */
+.singleRow { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+.singleCard {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: 208px; padding: 16px 14px 18px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--rar, #2e2837) 45%, var(--line));
+  background: linear-gradient(180deg, rgba(28,23,36,.92), rgba(19,16,23,.95));
+  box-shadow: 0 8px 22px rgba(0,0,0,.4);
+  transition: transform .18s ease, box-shadow .2s ease;
+}
+.singleCard:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 18px 36px rgba(0,0,0,.55),
+              0 0 22px color-mix(in srgb, var(--rar, #e3a44a) 24%, transparent);
+}
+.singleCard .cardFace { width: 150px; height: 202px; }
+.singleCard .buyBtn { width: 100%; }
+.singleRarity {
+  font-family: var(--font-mono, monospace); font-size: .68rem; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--rar, var(--muted));
+}
+.ownedTag { color: var(--muted); font-size: .8rem; }
+
+/* ---- shard top-ups ---- */
+.topupRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; }
+.topupCard {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 18px 16px 20px; border-radius: 14px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(28,23,36,.92), rgba(19,16,23,.95));
+  box-shadow: 0 8px 22px rgba(0,0,0,.4);
+  transition: transform .18s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.topupCard:hover {
+  transform: translateY(-6px); border-color: rgba(69,196,184,.5);
+  box-shadow: 0 18px 36px rgba(0,0,0,.55), 0 0 24px rgba(69,196,184,.14);
+}
+.topupIcon { width: 46px; height: 46px; object-fit: contain; filter: drop-shadow(0 0 12px rgba(69,196,184,.5)); }
+.topupAmount { font-family: var(--font-display), Georgia, serif; font-size: 1rem; color: #f0e8d8; letter-spacing: .05em; }
+.topupPrice {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; color: var(--gold);
+  font-size: 1.15rem;
+}
+.topupCard .buyBtn { width: 100%; }
+.topupNote { margin: 14px 0 0; text-align: center; color: var(--muted); font-size: .82rem; font-style: italic; }
+
+/* ---- pack opening overlay ---- */
+.packOverlay {
+  position: fixed; inset: 0; z-index: 50; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; padding: 32px 20px;
+  background: rgba(10,8,14,.92); backdrop-filter: blur(6px);
+  animation: overlayIn .25s ease;
+}
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+.overlayTitle {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(1.4rem, 3.5vw, 2rem); letter-spacing: .16em; text-transform: uppercase;
+  color: #f3ead9; text-shadow: 0 0 34px rgba(227,164,74,.45);
+}
+.overlayHint { margin: -8px 0 0; color: var(--muted); font-size: .85rem; font-style: italic; }
+
+.revealRow {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: clamp(10px, 1.4vw, 24px);
+  max-width: 94vw;
+}
+.flipCard {
+  width: clamp(160px, 15vw, 280px); height: auto; aspect-ratio: 3 / 4;
+  perspective: 1100px; cursor: pointer;
+  animation: cardDrop .35s ease backwards;
+  animation-delay: calc(.06s * var(--i, 0));
+}
+@keyframes cardDrop { from { opacity: 0; transform: translateY(-14px) scale(.92); } to { opacity: 1; } }
+.flipInner {
+  position: relative; width: 100%; height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .55s cubic-bezier(.2, .7, .3, 1.08);
+}
+.flipCard.flipped .flipInner { transform: rotateY(180deg); }
+.flipFace {
+  position: absolute; inset: 0; border-radius: 10px;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.flipBack img {
+  width: 100%; height: 100%; object-fit: cover; border-radius: 10px;
+  border: 2px solid var(--line); box-shadow: 0 8px 18px rgba(0,0,0,.6);
+}
+.flipFront { transform: rotateY(180deg); }
+.flipFront .cardFace, .flipFront .framedCard { width: 100%; height: 100%; }
+.flipCard.flipped .flipFront .cardFace {
+  border-color: var(--glow, var(--gold));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--glow, #e3a44a) 75%, transparent),
+              0 0 42px color-mix(in srgb, var(--glow, #e3a44a) 35%, transparent);
+}
+
+.doneBtn { min-width: 200px; padding: 13px 20px; font-size: 1.05rem; margin-top: 4px; }
+
+/* ---- generated game buttons ---- */
+
+.storeMain .buyBtn, .storePage .buyBtn, body .buyBtn {
+
+  border-style: solid;
+  border-color: transparent;
+  background: none;
+  border-radius: 0;
+  box-shadow: 0 6px 18px rgba(0,0,0,.55);
+  border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
+  border-width: 15px 42px;
+  color: #241505;
+  padding: 3px 4px;
+}
+.storeMain .buyBtn, .storePage .buyBtn, body .buyBtn:hover:not(:disabled) { filter: brightness(1.12); transform: none; }
+.storeMain .buyBtn, .storePage .buyBtn, body .buyBtn:active:not(:disabled) { transform: translateY(1px); }
+.storeMain .buyBtn, .storePage .buyBtn, body .buyBtn:disabled { filter: grayscale(.65) brightness(.7); }
+
+body .doneBtn {
+
+  border-style: solid;
+  border-color: transparent;
+  background: none;
+  border-radius: 0;
+  box-shadow: 0 6px 18px rgba(0,0,0,.55);
+  border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
+  border-width: 16px 46px;
+  color: #241505;
+  padding: 4px 8px;
+}
+body .doneBtn:hover:not(:disabled) { filter: brightness(1.12); transform: none; }
+body .doneBtn:active:not(:disabled) { transform: translateY(1px); }
+body .doneBtn:disabled { filter: grayscale(.65) brightness(.7); }
+
+/* generated back button */
+.storeBack {
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .85rem;
+  text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+}
+.storeBack:hover { filter: brightness(1.14); }
+
+/* transparent 9-slice button backgrounds — the asset provides the surface */
+.buyBtn.buyBtn, .doneBtn.doneBtn { background: transparent; border-radius: 0; }
+
+/* ---- rotations: daily deals / weekly featured / coming weeks ------------- */
+
+/* live countdown pill inside section headers */
+.countdown {
+  font-family: var(--font-mono, monospace); font-size: .74rem; letter-spacing: .1em;
+  text-transform: none; color: #f0e8d8; white-space: nowrap;
+  padding: 3px 12px; border-radius: 999px;
+  background: rgba(15,12,20,.78); border: 1px solid rgba(227,164,74,.4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* discount / free corner badges on rotation cards */
+.dealCard { position: relative; }
+.discountTag {
+  position: absolute; top: -10px; right: -8px; z-index: 2;
+  padding: 3px 11px; border-radius: 999px;
+  background: linear-gradient(180deg, #ffd98a, #e3a44a 60%, #a86f1f); color: #241505;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .72rem;
+  letter-spacing: .08em; text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+}
+.freeTag { background: linear-gradient(180deg, #8af0e4, #45c4b8 60%, #1f8078); }
+
+.wasPrice {
+  color: var(--muted); font-size: .82rem; font-weight: 400;
+  text-decoration: line-through; text-decoration-color: rgba(224,86,47,.85);
+}
+.freeRow span {
+  color: #45c4b8; font-size: .92rem; font-style: italic; letter-spacing: .04em;
+}
+.freeCard {
+  border-color: rgba(69,196,184,.45);
+}
+.freeCard:hover {
+  box-shadow: 0 18px 36px rgba(0,0,0,.55), 0 0 22px rgba(69,196,184,.24);
+}
+
+/* weekly theme banner (season key art + overlay text) */
+.weeklyBanner {
+  position: relative; overflow: hidden; margin: 0 0 16px; border-radius: 12px;
+  border: 1px solid rgba(227,164,74,.35); box-shadow: 0 8px 22px rgba(0,0,0,.4);
+}
+.weeklyBanner img {
+  display: block; width: 100%; height: 96px; object-fit: cover;
+  filter: saturate(.85) brightness(.8);
+}
+.weeklyBanner .bannerText {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  justify-content: center; gap: 3px; padding: 0 22px;
+  background: linear-gradient(90deg, rgba(10,8,14,.92) 38%, rgba(10,8,14,.3));
+}
+.weeklyBanner b {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.15rem;
+  letter-spacing: .1em; text-transform: uppercase; color: #f3ead9;
+  text-shadow: 0 2px 14px rgba(0,0,0,.8), 0 0 26px rgba(227,164,74,.3);
+}
+.weeklyBanner span { color: #cfc7d6; font-size: .84rem; font-style: italic; }
+
+/* coming-weeks teaser strip — framed panels */
+.teaserStrip { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.teaserCard {
+  display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill;
+  border-width: 30px 34px; padding: 4px 8px 10px;
+  filter: drop-shadow(0 10px 26px rgba(0,0,0,.5));
+}
+.teaserWhen {
+  font-family: var(--font-mono, monospace); font-size: .64rem; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--muted);
+}
+.teaserName {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.02rem;
+  letter-spacing: .06em; color: var(--gold);
+  text-shadow: 0 0 16px rgba(227,164,74,.3);
+}
+.teaserDesc { color: var(--muted); font-size: .78rem; line-height: 1.45; }
