@@ -15,6 +15,7 @@ import { fmtCountdown, getHotDeals } from "@/lib/game/hotdeals";
 import type { FactionId } from "@/lib/game/types";
 import { authClient } from "@/lib/auth-client";
 import Intro from "@/components/menu/Intro";
+import LorePrologue from "@/components/lore/LorePrologue";
 import Landing from "@/components/landing/Landing";
 import "./menu.css";
 
@@ -68,7 +69,10 @@ function MenuInner() {
       }
       p.deckVersion = STARTER_DECK_VERSION;
     }
-    if (!p.introSeen) setShowIntro(true);
+    // Anyone who already played (or finished the tutorial) is never sent through the prologue.
+    if (!p.loreSeen && (p.wins + p.losses > 0 || p.tutorialDone)) p.loreSeen = true;
+    // The short intro overlay waits until the prologue is done.
+    if (p.loreSeen && !p.introSeen) setShowIntro(true);
     saveProfile(p);
     setProfile(p);
   }, []);
@@ -150,6 +154,14 @@ function MenuInner() {
     }, 450 + i * 380));
   };
 
+  const dismissLore = () => {
+    const p = loadProfile();
+    p.loreSeen = true;
+    saveProfile(p);
+    setProfile(p);
+    if (!p.introSeen) setShowIntro(true);
+  };
+
   const dismissIntro = () => {
     setShowIntro(false);
     const p = loadProfile();
@@ -163,8 +175,11 @@ function MenuInner() {
   if (!sessionPending && !session?.user) {
     return <Landing />;
   }
-  if (sessionPending) {
+  if (sessionPending || !profile) {
     return <main className="menuMain"><div className="menuBackdrop" aria-hidden="true" /></main>;
+  }
+  if (!profile.loreSeen) {
+    return <LorePrologue onDone={dismissLore} />;
   }
 
   /* eslint-disable @next/next/no-img-element */

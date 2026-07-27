@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS matches (
   turnDeadline INTEGER NOT NULL,
   campaignNode TEXT,
   rewards TEXT,                       -- JSON per player after finish
+  p0Spells INTEGER DEFAULT 0,         -- running tally: spells P0 has cast this match
+  p0UnitsLost INTEGER DEFAULT 0,      -- running tally: P0 units that died this match
   createdAt INTEGER NOT NULL DEFAULT (unixepoch()*1000),
   updatedAt INTEGER NOT NULL DEFAULT (unixepoch()*1000)
 );
@@ -100,7 +102,28 @@ CREATE TABLE IF NOT EXISTS campaign_progress (
   clearedAt INTEGER NOT NULL DEFAULT (unixepoch()*1000),
   PRIMARY KEY (playerId, nodeId)
 );
+
+-- One row per chapter whose completion milestone has already been paid out.
+CREATE TABLE IF NOT EXISTS campaign_chapter_rewards (
+  playerId INTEGER NOT NULL,
+  chapter INTEGER NOT NULL,
+  stars INTEGER NOT NULL DEFAULT 0,   -- chapter stars held when the bonus was granted
+  grantedAt INTEGER NOT NULL DEFAULT (unixepoch()*1000),
+  PRIMARY KEY (playerId, chapter)
+);
 `);
+
+/** Idempotent migration for databases created before a column existed. */
+function addColumn(table: string, column: string, decl: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
+}
+
+addColumn("matches", "p0Spells", "INTEGER DEFAULT 0");
+addColumn("matches", "p0UnitsLost", "INTEGER DEFAULT 0");
+addColumn("campaign_progress", "stars", "INTEGER NOT NULL DEFAULT 1");
 
 export function leagueFor(rating: number): string {
   if (rating < 1100) return "Bronze";

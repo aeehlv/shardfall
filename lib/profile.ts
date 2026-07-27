@@ -18,6 +18,8 @@ export interface Profile {
   losses: number;
   introSeen: boolean;
   tutorialDone: boolean;
+  /** the scroll-driven lore prologue has been watched (or skipped) once */
+  loreSeen?: boolean;
   /** YYYY-MM-DD (UTC) of the last free daily-card claim */
   lastFreeClaim?: string;
 }

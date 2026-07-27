@@ -8,10 +8,13 @@ import { aiTakeTurn } from "@/lib/game/ai";
 import { buildStarterDeck } from "@/lib/game/decks";
 import type { ActionResult, FactionId, GameAction, GameEvent, GameState } from "@/lib/game/types";
 import { applyMatchResult, loadProfile, saveProfile } from "@/lib/profile";
-import { fetchMatch, postMatchAction, type MatchView } from "@/lib/online";
+import { applyEventToView, fetchMatch, postMatchAction, type MatchView } from "@/lib/online";
 import CardFace from "@/components/play/CardFace";
 import FramedCard from "@/components/play/FramedCard";
 import UnitTile, { type FxNumber } from "@/components/play/UnitTile";
+import CampaignRewards, {
+  type CampaignStarDetail, type ChapterBonusInfo, type PacksInput,
+} from "@/components/campaign/CampaignRewards";
 import TutorialOverlay from "./TutorialOverlay";
 import { play as playSfx, preload as preloadSfx, startMusic } from "@/lib/sound";
 import "./play.css";
@@ -36,6 +39,13 @@ let fxKey = 1;
 interface EndedInfo {
   won: boolean; gold: number; xp: number; levelUps: number;
   ratingDelta?: number; rating?: number; league?: string; pack?: string; firstClear?: boolean;
+  /** campaign matches only — presence of `stars` switches to the campaign reward screen */
+  stars?: number;
+  starDetails?: CampaignStarDetail[];
+  nodeId?: string; nodeName?: string; chapter?: number; chapterName?: string;
+  shards?: number; packs?: PacksInput;
+  card?: string;
+  chapterComplete?: boolean | ChapterBonusInfo | null;
 }
 
 export default function PlayClient() {
@@ -74,6 +84,7 @@ export default function PlayClient() {
   const [spawning, setSpawning] = useState<Set<number>>(new Set());
   const [sprites, setSprites] = useState<{ key: number; kind: string; x: number; y: number; s: number }[]>([]);
   const [bolts, setBolts] = useState<{ key: number; x: number; y: number; dx: number; dy: number; hue: string }[]>([]);
+  const [flyers, setFlyers] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
   const [concedeArmed, setConcedeArmed] = useState(false);
 
   const unitRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -85,6 +96,9 @@ export default function PlayClient() {
   const suppressClick = useRef(false);
   const seqRef = useRef(-1);
   const pollingRef = useRef(false);
+  const gameRef = useRef<GameState | null>(null);
+
+  useEffect(() => { gameRef.current = game; }, [game]);
 
   const pushFx = useCallback((key: string, fx: FxNumber) => {
     setFxMap((m) => ({ ...m, [key]: [...(m[key] ?? []), fx] }));
@@ -121,6 +135,18 @@ export default function PlayClient() {
     setBolts((b) => b.filter((x) => x.key !== key));
   }, []);
 
+  /** Face-down card gliding from the opponent's hand onto the field. */
+  const flyEnemyCard = useCallback(async () => {
+    const from = rectCenter(boardRef.current?.querySelector(".enemyHand"))
+      ?? { x: 140, y: 60 };
+    const to = rectCenter(boardRef.current?.querySelector(".boardRow.enemy"))
+      ?? { x: (typeof window !== "undefined" ? window.innerWidth : 1500) / 2, y: 300 };
+    const key = fxKey++;
+    setFlyers((f) => [...f, { key, x: from.x, y: from.y, dx: to.x - from.x, dy: to.y - from.y }]);
+    await sleep(560);
+    setFlyers((f) => f.filter((x) => x.key !== key));
+  }, []);
+
   const finishOffline = useCallback(async (won: boolean) => {
     if (endedRef.current) return;
     endedRef.current = true;
@@ -134,11 +160,23 @@ export default function PlayClient() {
 
   const animate = useCallback(async (r: { state: GameState; events: GameEvent[] }, aiSide: boolean) => {
     let spellFrom: { x: number; y: number } | null = null;
+    // step the board forward event by event so nothing pops in all at once
+    let view: GameState | null = gameRef.current ? structuredClone(gameRef.current) : null;
+    const step = (ev: GameEvent) => {
+      if (!view) return;
+      view = applyEventToView(view, ev, getCard);
+      gameRef.current = view;
+      setGame(view);
+    };
     for (const ev of r.events) {
+      // deaths animate first, then leave the board; everything else lands immediately
+      if (ev.type !== "DEATH" && ev.type !== "RETURNED") step(ev);
       switch (ev.type) {
         case "CARD_PLAYED":
-          if ((aiSide || ev.player === 1) && ev.cardId) {
-            setReveal(ev.cardId); await sleep(1000); setReveal(null);
+          // opponent plays stay face-down: a card glides in, then resolves
+          if (ev.player === 1) {
+            await sleep(260);
+            await flyEnemyCard();
           }
           break;
         case "SPELL_CAST": {
@@ -152,7 +190,7 @@ export default function PlayClient() {
           const uid = ev.uid;
           setSpawning((sp) => new Set(sp).add(uid));
           setTimeout(() => setSpawning((sp) => { const n = new Set(sp); n.delete(uid); return n; }), 520);
-          await sleep(140);
+          await sleep(ev.player === 1 ? 480 : 140);
           break;
         }
         case "ATTACK": {
@@ -163,13 +201,15 @@ export default function PlayClient() {
             if (tEl) {
               const a = el.getBoundingClientRect();
               const b = tEl.getBoundingClientRect();
-              dx = (b.left - a.left) * 0.98; dy = (b.top - a.top) * 0.98;
+              dx = (b.left - a.left) * 0.72; dy = (b.top - a.top) * 0.72;
             }
             el.style.setProperty("--lx", `${dx}px`);
             el.style.setProperty("--ly", `${dy}px`);
             el.classList.add("lunging");
-            await sleep(340);
+            await sleep(300);
             el.classList.remove("lunging");
+            await sleep(170); // return to formation before any death plays
+            if (ev.player === 1) await sleep(220); // let each enemy strike land separately
           }
           const hit = ev.targetUid !== undefined
             ? unitRefs.current.get(ev.targetUid)
@@ -219,11 +259,13 @@ export default function PlayClient() {
           if (pt) spawnSprite("shatter", pt.x, pt.y, 165, 700);
           setDying((s) => new Set(s).add(ev.uid));
           await sleep(320);
+          step(ev);
           break;
         }
         case "RETURNED":
           setDying((s) => new Set(s).add(ev.uid));
           await sleep(300);
+          step(ev);
           break;
         case "IGNITE": {
           const el = unitRefs.current.get(ev.uid);
@@ -247,7 +289,7 @@ export default function PlayClient() {
     setDying(new Set());
     setGame(r.state);
     if (!online && r.state.winner !== null) await finishOffline(r.state.winner === 0);
-  }, [pushFx, finishOffline, online, spawnSprite, targetPoint, fireBolt]);
+  }, [pushFx, finishOffline, online, spawnSprite, targetPoint, fireBolt, flyEnemyCard]);
 
   /** Online: absorb a server view — animate its events, sync state/seq/deadline/rewards. */
   const absorbView = useCallback(async (view: MatchView) => {
@@ -663,6 +705,11 @@ export default function PlayClient() {
         <img key={f.key} src={`/fx/${f.kind}.jpg`} alt="" className={`fxSprite fx-${f.kind}`}
           style={{ left: f.x, top: f.y, width: f.s, height: f.s }} />
       ))}
+      {flyers.map((f) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={f.key} src="/cards/back.jpg" alt="" className="cardFlyer"
+          style={{ left: f.x, top: f.y, "--fx": `${f.dx}px`, "--fy": `${f.dy}px` } as React.CSSProperties} />
+      ))}
       {bolts.map((b) => (
         <span key={b.key} className="fxBolt"
           style={{ left: b.x, top: b.y, "--bx": `${b.dx}px`, "--by": `${b.dy}px`, "--hue": b.hue } as React.CSSProperties} />
@@ -681,18 +728,31 @@ export default function PlayClient() {
         </svg>
       )}
 
-      {/* hover popup over the card */}
-      {zoomCard && zoomDef && !busy && !drag && (
-        <div className="zoomPop" style={{
-          left: Math.min(Math.max(zoomCard.x, 170), (typeof window !== "undefined" ? window.innerWidth : 1500) - 170),
-          top: zoomCard.y < 480 ? zoomCard.y + 90 : zoomCard.y - 90,
-          transform: zoomCard.y < 480 ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-        }}>
-          {FRAMED_FACTIONS.has(zoomDef.faction)
-            ? <FramedCard card={zoomDef} width={300} />
-            : <div className="zoomFallback"><CardFace card={zoomDef} /></div>}
-        </div>
-      )}
+      {/* hover popup — beside enemy units, above your own cards */}
+      {zoomCard && zoomDef && !busy && !drag && (() => {
+        const vw = typeof window !== "undefined" ? window.innerWidth : 1500;
+        const vh = typeof window !== "undefined" ? window.innerHeight : 1000;
+        const enemySide = zoomCard.y < vh * 0.45;
+        const style: React.CSSProperties = enemySide
+          ? {
+              // sit beside the enemy unit so the battlefield stays visible
+              left: zoomCard.x < vw / 2 ? zoomCard.x + 250 : zoomCard.x - 250,
+              top: Math.max(220, Math.min(zoomCard.y + 40, vh - 230)),
+              transform: "translate(-50%, -50%)",
+            }
+          : {
+              left: Math.min(Math.max(zoomCard.x, 170), vw - 170),
+              top: zoomCard.y - 150,
+              transform: "translate(-50%, -100%)",
+            };
+        return (
+          <div className={`zoomPop${enemySide ? " enemySide" : ""}`} style={style}>
+            {FRAMED_FACTIONS.has(zoomDef.faction)
+              ? <FramedCard card={zoomDef} width={300} />
+              : <div className="zoomFallback"><CardFace card={zoomDef} /></div>}
+          </div>
+        );
+      })()}
 
       {/* opponent card reveal */}
       {reveal && revealDef && (
@@ -720,7 +780,30 @@ export default function PlayClient() {
         <TutorialOverlay game={game} step={tutStep} setStep={setTutStep} myTurn={myTurn} />
       )}
 
-      {ended && (
+      {/* campaign matches get the star/reward ceremony; everything else the generic plate */}
+      {ended && ended.stars !== undefined && (
+        <CampaignRewards
+          won={ended.won}
+          nodeId={ended.nodeId}
+          nodeName={ended.nodeName}
+          chapter={ended.chapter}
+          chapterName={ended.chapterName}
+          stars={ended.stars}
+          starDetails={ended.starDetails}
+          gold={ended.gold}
+          shards={ended.shards}
+          xp={ended.xp}
+          levelUps={ended.levelUps}
+          packs={ended.packs ?? (ended.pack ? [ended.pack] : undefined)}
+          card={ended.card}
+          firstClear={ended.firstClear}
+          chapterComplete={ended.chapterComplete}
+          onContinue={() => router.push("/campaign")}
+          onMenu={() => router.push("/")}
+        />
+      )}
+
+      {ended && ended.stars === undefined && (
         <div className="endOverlay" data-testid="end-overlay">
           <div className="endCardPanel">
             <h1 className={ended.won ? "vic" : "def"}>{ended.won ? "Victory" : "Defeat"}</h1>

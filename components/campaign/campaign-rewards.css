@@ -1,0 +1,309 @@
+/* ---- Shardfall campaign REWARD SCREEN -------------------------------------- */
+
+.crWrap {
+  position: fixed; inset: 0; z-index: 95;
+  display: flex; align-items: center; justify-content: center;
+  padding: clamp(10px, 3vh, 30px) clamp(10px, 3vw, 26px);
+  animation: crFade .3s ease;
+}
+@keyframes crFade { from { opacity: 0; } to { opacity: 1; } }
+
+.crVeil {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 8%, rgba(227,164,74,.18), transparent 62%),
+    radial-gradient(140% 110% at 50% 100%, rgba(20,14,28,.6), transparent 70%),
+    rgba(8,6,12,.92);
+  backdrop-filter: blur(7px);
+}
+
+/* slow rotating god-rays behind the plate (victory only) */
+.crRays {
+  position: absolute; left: 50%; top: 42%; width: 190vmax; height: 190vmax;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    rgba(227,164,74,.16) 0deg 6deg, transparent 6deg 26deg,
+    rgba(227,164,74,.10) 26deg 30deg, transparent 30deg 54deg,
+    rgba(227,164,74,.17) 54deg 60deg, transparent 60deg 88deg,
+    rgba(227,164,74,.09) 88deg 92deg, transparent 92deg 120deg,
+    rgba(227,164,74,.15) 120deg 126deg, transparent 126deg 156deg,
+    rgba(227,164,74,.10) 156deg 160deg, transparent 160deg 190deg,
+    rgba(227,164,74,.16) 190deg 196deg, transparent 196deg 224deg,
+    rgba(227,164,74,.09) 224deg 228deg, transparent 228deg 258deg,
+    rgba(227,164,74,.15) 258deg 264deg, transparent 264deg 292deg,
+    rgba(227,164,74,.10) 292deg 296deg, transparent 296deg 326deg,
+    rgba(227,164,74,.14) 326deg 332deg, transparent 332deg 360deg);
+  -webkit-mask: radial-gradient(closest-side, #000 6%, rgba(0,0,0,.55) 34%, transparent 68%);
+  mask: radial-gradient(closest-side, #000 6%, rgba(0,0,0,.55) 34%, transparent 68%);
+  opacity: .8; pointer-events: none;
+  animation: crRays 90s linear infinite;
+}
+@keyframes crRays { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+/* ---- the plate ---- */
+.crPanel {
+  position: relative; z-index: 1;
+  width: min(720px, 96vw); max-height: 94dvh; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill stretch;
+  border-width: clamp(30px, 5.2vw, 48px) clamp(32px, 5.8vw, 54px);
+  filter: drop-shadow(0 26px 64px rgba(0,0,0,.75)) drop-shadow(0 0 46px rgba(227,164,74,.16));
+  animation: crPanelIn .46s cubic-bezier(.2,.75,.3,1.06) both;
+  scrollbar-width: thin; scrollbar-color: rgba(227,164,74,.6) rgba(10,8,14,.55);
+}
+@keyframes crPanelIn {
+  from { opacity: 0; transform: translateY(18px) scale(.95); }
+  to   { opacity: 1; transform: none; }
+}
+.crPanel::-webkit-scrollbar { width: 7px; }
+.crPanel::-webkit-scrollbar-thumb {
+  border-radius: 999px; background: linear-gradient(180deg, #f2c87f, #b07d2c 70%, #7d571c);
+}
+
+/* ---- header ---- */
+.crHead { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; }
+.crChapter {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .7rem;
+  letter-spacing: .26em; text-transform: uppercase; color: var(--gold, #e3a44a);
+  text-shadow: 0 0 18px rgba(227,164,74,.45);
+}
+.crTitle {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(1.5rem, 4.2vw, 2.3rem); line-height: 1.1; letter-spacing: .09em;
+  text-transform: uppercase; color: #f7efdd;
+  text-shadow: 0 3px 20px rgba(0,0,0,.85), 0 0 40px rgba(227,164,74,.4);
+}
+.crTitle.lost { color: #d9c8c2; text-shadow: 0 3px 20px rgba(0,0,0,.85), 0 0 30px rgba(224,86,47,.3); }
+.crVerdict {
+  margin: 2px 0 0; font-family: var(--font-display), Georgia, serif; font-size: .82rem;
+  letter-spacing: .2em; text-transform: uppercase; color: #cdb98f;
+}
+.crRule {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: min(320px, 82%); margin-top: 4px; color: rgba(227,164,74,.85);
+}
+.crRule i { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(227,164,74,.65), transparent); }
+.crRule span { font-size: .55rem; line-height: 1; text-shadow: 0 0 10px rgba(227,164,74,.7); }
+
+/* ---- act one: stars ---- */
+.crStars {
+  display: flex; align-items: flex-start; justify-content: center; gap: clamp(8px, 3vw, 24px);
+  width: 100%; margin-top: 2px;
+}
+.crStar {
+  position: relative; flex: 1 1 0; min-width: 0; max-width: 190px;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .3s ease, transform .3s ease;
+}
+.crStar.in { opacity: 1; transform: none; }
+
+.crStarSlot {
+  position: relative; width: clamp(52px, 10vw, 68px); height: clamp(52px, 10vw, 68px);
+  display: grid; place-items: center;
+}
+.crStarGlyph {
+  font-size: clamp(44px, 8.4vw, 58px); line-height: 1;
+  color: #2b2431; text-shadow: 0 2px 4px rgba(0,0,0,.7);
+  -webkit-text-stroke: 1px rgba(140,127,104,.45);
+  transform: scale(.86); transition: none;
+}
+.crStar.earned .crStarGlyph {
+  color: #ffd478; -webkit-text-stroke: 1px rgba(255,236,190,.85);
+  text-shadow:
+    0 0 10px rgba(255,203,110,.95), 0 0 26px rgba(227,164,74,.75),
+    0 0 52px rgba(227,164,74,.45), 0 3px 6px rgba(0,0,0,.6);
+  animation: crStarPop .62s cubic-bezier(.18,.9,.32,1.35) both;
+}
+@keyframes crStarPop {
+  0%   { transform: scale(.2) rotate(-38deg); opacity: 0; }
+  55%  { transform: scale(1.28) rotate(6deg); opacity: 1; }
+  75%  { transform: scale(.94) rotate(-2deg); }
+  100% { transform: scale(1.02) rotate(0); opacity: 1; }
+}
+
+/* small burst behind an earned star */
+.crStarBurst {
+  position: absolute; inset: -18%; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle, rgba(255,226,160,.85), rgba(227,164,74,.32) 42%, transparent 68%);
+}
+.crStar.earned .crStarBurst { animation: crBurst .72s ease-out both; }
+@keyframes crBurst {
+  0%   { opacity: 0; transform: scale(.25); }
+  35%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 0; transform: scale(1.85); }
+}
+.crStarRing {
+  position: absolute; inset: 2%; border-radius: 50%; pointer-events: none; opacity: 0;
+  box-shadow: 0 0 0 2px rgba(255,214,140,.85), 0 0 22px rgba(227,164,74,.6);
+}
+.crStar.earned .crStarRing { animation: crRing .8s ease-out both; }
+@keyframes crRing {
+  0%   { opacity: .95; transform: scale(.4); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+
+.crStarLabel {
+  font-size: .74rem; line-height: 1.35; color: #8f8598; letter-spacing: .02em;
+  max-width: 20ch;
+}
+.crStar.earned .crStarLabel { color: #e9dcc0; }
+
+/* ---- act two: reward rows ---- */
+.crRewards {
+  width: 100%; display: flex; flex-direction: column; gap: 6px;
+  padding: 11px 14px 12px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(30,24,38,.72), rgba(14,11,19,.72));
+  box-shadow: inset 0 0 0 1px rgba(227,164,74,.22), 0 10px 26px rgba(0,0,0,.45);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.crRewards.in { opacity: 1; transform: none; }
+.crSectionTag {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .64rem;
+  letter-spacing: .24em; text-transform: uppercase; color: var(--gold, #e3a44a);
+  margin-bottom: 2px;
+}
+.crRewardRow {
+  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
+  padding: 4px 2px; text-align: left;
+  opacity: 0; transform: translateX(-10px);
+}
+.crRewardRow.in { animation: crRowIn .42s ease both; animation-delay: calc(.09s * var(--i, 0)); }
+@keyframes crRowIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+.crRewardRow + .crRewardRow { border-top: 1px solid rgba(227,164,74,.12); }
+.crRewardIcon {
+  width: 30px; height: 30px; object-fit: contain; justify-self: center;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,.6));
+}
+.crRewardIcon.packIcon {
+  width: 24px; height: 34px; object-fit: cover; border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(227,164,74,.35), 0 4px 10px rgba(0,0,0,.55);
+}
+.crRewardIcon.cardIcon {
+  width: 30px; height: 30px; object-fit: cover; border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(227,164,74,.5), 0 4px 10px rgba(0,0,0,.55);
+}
+.crRewardLabel { color: #cfc4b1; font-size: .88rem; letter-spacing: .04em; }
+.crRewardValue {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.06rem;
+  color: #ffd98a; letter-spacing: .04em; text-shadow: 0 0 16px rgba(227,164,74,.45);
+  font-variant-numeric: tabular-nums;
+}
+.crCardName { font-size: .92rem; color: #f0c777; }
+.crLevelUp {
+  margin: 4px 0 0; font-size: .8rem; letter-spacing: .06em; color: #9ad06a;
+  text-shadow: 0 0 14px rgba(140,193,82,.4);
+}
+.crNothing {
+  margin: 0; max-width: 46ch; color: #9c93a8; font-size: .86rem; font-style: italic;
+  opacity: 0; transition: opacity .35s ease;
+}
+.crNothing.in { opacity: 1; }
+
+/* ---- act three: chapter complete ---- */
+.crChapterAct {
+  position: relative; width: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 14px 16px 15px; border-radius: 12px;
+  background:
+    radial-gradient(120% 130% at 50% 0%, rgba(227,164,74,.22), transparent 62%),
+    linear-gradient(180deg, rgba(46,34,20,.82), rgba(16,12,20,.86));
+  box-shadow: inset 0 0 0 1px rgba(227,164,74,.4), 0 12px 30px rgba(0,0,0,.5);
+  opacity: 0; transform: translateY(14px) scale(.97);
+  transition: opacity .45s ease, transform .45s cubic-bezier(.2,.8,.3,1.05);
+}
+.crChapterAct.in { opacity: 1; transform: none; }
+.crChapterCrest { width: 46px; height: 46px; margin-top: -2px; }
+.crChapterCrest img {
+  width: 100%; height: 100%; object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(227,164,74,.6));
+  animation: crCrest 4.5s ease-in-out infinite;
+}
+@keyframes crCrest {
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 14px rgba(227,164,74,.5)); }
+  50%      { transform: translateY(-3px); filter: drop-shadow(0 0 26px rgba(227,164,74,.8)); }
+}
+.crChapterTitle {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(1.05rem, 3vw, 1.4rem); letter-spacing: .16em; text-transform: uppercase;
+  color: #ffe6ac; text-shadow: 0 0 26px rgba(227,164,74,.6), 0 2px 8px rgba(0,0,0,.8);
+}
+.crChapterName { margin: 0; color: #cbbfa4; font-size: .85rem; font-style: italic; }
+.crChapterStars { margin: 2px 0 0; color: #d8c69b; font-size: .78rem; letter-spacing: .1em; }
+.crStarMini { color: var(--gold, #e3a44a); margin-right: 6px; text-shadow: 0 0 10px rgba(227,164,74,.7); }
+.crChapterRows {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 6px;
+}
+.crChip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 999px;
+  background: rgba(12,9,16,.7); box-shadow: inset 0 0 0 1px rgba(227,164,74,.34);
+  color: #f0e3c6; font-size: .84rem; letter-spacing: .03em;
+  font-family: var(--font-display), Georgia, serif;
+}
+.crChip img { width: 18px; height: 18px; object-fit: contain; }
+.crChip img.packIcon { width: 15px; height: 22px; object-fit: cover; border-radius: 3px; }
+.crChip img.cardIcon { width: 20px; height: 20px; object-fit: cover; border-radius: 50%; }
+
+/* ---- actions ---- */
+.crActions {
+  display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 4px;
+  opacity: 0; transition: opacity .35s ease;
+}
+.crActions.in { opacity: 1; }
+.crBtn {
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
+  border-width: 15px 42px; padding: 6px 10px; min-width: 220px;
+  color: #241505; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: 1.02rem; letter-spacing: .05em; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 22px rgba(0,0,0,.6);
+  transition: filter .15s ease, transform .12s ease;
+}
+.crBtn:hover { filter: brightness(1.13); }
+.crBtn:active { transform: translateY(1px); }
+.crBtnDark {
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 3px 6px; min-width: 150px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .84rem; letter-spacing: .06em; cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0,0,0,.8);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: filter .15s ease, transform .12s ease;
+}
+.crBtnDark:hover { filter: brightness(1.16); }
+.crBtnDark:active { transform: translateY(1px); }
+
+/* ---- small screens ---- */
+@media (max-width: 560px) {
+  .crPanel { border-width: 26px 30px; gap: 10px; }
+  .crStars { gap: 6px; }
+  .crStarLabel { font-size: .66rem; }
+  .crRewardLabel { font-size: .8rem; }
+  .crBtn { min-width: 0; width: 100%; }
+}
+@media (max-height: 720px) {
+  .crPanel { gap: 9px; }
+  .crStarSlot { width: 46px; height: 46px; }
+  .crStarGlyph { font-size: 38px; }
+}
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .crWrap, .crPanel, .crRays, .crStar.earned .crStarGlyph, .crStar.earned .crStarBurst,
+  .crStar.earned .crStarRing, .crRewardRow.in, .crChapterCrest img {
+    animation: none !important;
+  }
+  .crPanel, .crStar, .crRewards, .crRewardRow, .crChapterAct, .crActions, .crNothing {
+    opacity: 1 !important; transform: none !important;
+  }
+}
