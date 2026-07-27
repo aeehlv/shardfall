@@ -1,6 +1,6 @@
 .menuMain {
   position: relative; min-height: 100dvh; display: flex; flex-direction: column;
-  align-items: center; padding: 14px 24px 32px; overflow: hidden;
+  align-items: center; padding: 34px 24px 32px; overflow: hidden;
 }
 .menuBackdrop {
   position: fixed; inset: 0; z-index: -1; background: var(--ground);
@@ -26,7 +26,7 @@
 .menuTag { margin: 0; color: var(--muted); }
 
 .walletBar {
-  position: fixed; top: 22px; right: 116px; z-index: 20;
+  position: fixed; top: 26px; right: 300px; z-index: 20;
   display: flex; gap: 18px; align-items: center;
   background: rgba(15,12,20,.6); border: 1px solid var(--line); border-radius: 999px;
   padding: 8px 20px; font-family: var(--font-display), Georgia, serif; font-size: 1rem; color: #eae3d6;
@@ -36,7 +36,7 @@
 .walletBar .lvl { color: var(--gold); }
 .walletBar .record { color: var(--muted); font-size: .85rem; }
 
-.menuNav { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 13px; flex: 1; width: min(420px, 92vw); }
+.menuNav { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 13px; flex: 1; width: min(420px, 92vw); margin-top: 12px; }
 .menuBtn {
   display: block; width: 100%; text-align: center; padding: 15px 20px; border-radius: 12px;
   border: 1px solid var(--line); background: rgba(22,18,28,.85); color: #eae3d6;
@@ -155,12 +155,12 @@
 .moreLink:hover { background: #221c2c; color: var(--gold); }
 
 .seasonBanner {
-  display: block; width: min(300px, 60vw); margin: 16px auto 0;
+  display: block; width: min(340px, 64vw); margin: 26px auto 0;
   filter: drop-shadow(0 4px 18px rgba(0,0,0,.7)) drop-shadow(0 0 20px rgba(227,164,74,.25));
 }
 
 .logoLockup {
-  display: block; width: min(560px, 86vw); margin: 0 auto;
+  display: block; width: min(620px, 88vw); margin: 8px auto 0;
   filter: drop-shadow(0 8px 30px rgba(0,0,0,.75)) drop-shadow(0 0 34px rgba(227,164,74,.22));
 }
 
@@ -231,8 +231,12 @@
 .btn.subtle:hover { color: #eae3d6; }
 
 /* store corner icon */
+.cornerRail {
+  position: fixed; top: 10px; right: 24px; z-index: 21;
+  display: flex; align-items: flex-start; gap: 14px;
+}
 .storeCorner {
-  position: fixed; top: 12px; right: 24px; z-index: 21; text-decoration: none;
+  position: relative; text-decoration: none;
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   transition: transform .15s ease, filter .2s ease;
 }

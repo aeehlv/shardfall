@@ -36,7 +36,7 @@
     rgba(227,164,74,.14) 326deg 332deg, transparent 332deg 360deg);
   -webkit-mask: radial-gradient(closest-side, #000 6%, rgba(0,0,0,.55) 34%, transparent 68%);
   mask: radial-gradient(closest-side, #000 6%, rgba(0,0,0,.55) 34%, transparent 68%);
-  opacity: .8; pointer-events: none;
+  opacity: .55; pointer-events: none;
   animation: crRays 90s linear infinite;
 }
 @keyframes crRays { to { transform: translate(-50%, -50%) rotate(360deg); } }
@@ -45,7 +45,7 @@
 .crPanel {
   position: relative; z-index: 1;
   width: min(720px, 96vw); max-height: 94dvh; overflow-y: auto;
-  display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
   border-style: solid; border-color: transparent; border-radius: 0;
   border-image: url("/ui/panel-frame.png") 150 170 fill stretch;
   border-width: clamp(30px, 5.2vw, 48px) clamp(32px, 5.8vw, 54px);
@@ -87,6 +87,9 @@
 .crRule i { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, rgba(227,164,74,.65), transparent); }
 .crRule span { font-size: .55rem; line-height: 1; text-shadow: 0 0 10px rgba(227,164,74,.7); }
 
+.crBest { margin: -4px 0 0; color: var(--muted, #9c93a8); font-size: .76rem; letter-spacing: .1em; }
+.crBest b { color: #ffd478; letter-spacing: .12em; text-shadow: 0 0 12px rgba(227,164,74,.6); }
+
 /* ---- act one: stars ---- */
 .crStars {
   display: flex; align-items: flex-start; justify-content: center; gap: clamp(8px, 3vw, 24px);
@@ -101,11 +104,11 @@
 .crStar.in { opacity: 1; transform: none; }
 
 .crStarSlot {
-  position: relative; width: clamp(52px, 10vw, 68px); height: clamp(52px, 10vw, 68px);
+  position: relative; width: clamp(46px, 8.6vw, 60px); height: clamp(46px, 8.6vw, 60px);
   display: grid; place-items: center;
 }
 .crStarGlyph {
-  font-size: clamp(44px, 8.4vw, 58px); line-height: 1;
+  font-size: clamp(38px, 7.2vw, 50px); line-height: 1;
   color: #2b2431; text-shadow: 0 2px 4px rgba(0,0,0,.7);
   -webkit-text-stroke: 1px rgba(140,127,104,.45);
   transform: scale(.86); transition: none;
@@ -167,8 +170,8 @@
   margin-bottom: 2px;
 }
 .crRewardRow {
-  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
-  padding: 4px 2px; text-align: left;
+  display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px;
+  padding: 3px 2px; text-align: left;
   opacity: 0; transform: translateX(-10px);
 }
 .crRewardRow.in { animation: crRowIn .42s ease both; animation-delay: calc(.09s * var(--i, 0)); }
@@ -178,15 +181,15 @@
 }
 .crRewardRow + .crRewardRow { border-top: 1px solid rgba(227,164,74,.12); }
 .crRewardIcon {
-  width: 30px; height: 30px; object-fit: contain; justify-self: center;
+  width: 26px; height: 26px; object-fit: contain; justify-self: center;
   filter: drop-shadow(0 3px 8px rgba(0,0,0,.6));
 }
 .crRewardIcon.packIcon {
-  width: 24px; height: 34px; object-fit: cover; border-radius: 4px;
+  width: 21px; height: 30px; object-fit: cover; border-radius: 4px;
   box-shadow: 0 0 0 1px rgba(227,164,74,.35), 0 4px 10px rgba(0,0,0,.55);
 }
 .crRewardIcon.cardIcon {
-  width: 30px; height: 30px; object-fit: cover; border-radius: 50%;
+  width: 26px; height: 26px; object-fit: cover; border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(227,164,74,.5), 0 4px 10px rgba(0,0,0,.55);
 }
 .crRewardLabel { color: #cfc4b1; font-size: .88rem; letter-spacing: .04em; }
@@ -210,7 +213,7 @@
 .crChapterAct {
   position: relative; width: 100%;
   display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 14px 16px 15px; border-radius: 12px;
+  padding: 11px 16px 12px; border-radius: 12px;
   background:
     radial-gradient(120% 130% at 50% 0%, rgba(227,164,74,.22), transparent 62%),
     linear-gradient(180deg, rgba(46,34,20,.82), rgba(16,12,20,.86));
@@ -219,7 +222,7 @@
   transition: opacity .45s ease, transform .45s cubic-bezier(.2,.8,.3,1.05);
 }
 .crChapterAct.in { opacity: 1; transform: none; }
-.crChapterCrest { width: 46px; height: 46px; margin-top: -2px; }
+.crChapterCrest { width: 38px; height: 38px; margin-top: -2px; }
 .crChapterCrest img {
   width: 100%; height: 100%; object-fit: contain;
   filter: drop-shadow(0 0 16px rgba(227,164,74,.6));
@@ -254,14 +257,14 @@
 
 /* ---- actions ---- */
 .crActions {
-  display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 4px;
-  opacity: 0; transition: opacity .35s ease;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 2px; opacity: 0; transition: opacity .35s ease;
 }
 .crActions.in { opacity: 1; }
 .crBtn {
   border-style: solid; border-color: transparent; background: none; border-radius: 0;
   border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
-  border-width: 15px 42px; padding: 6px 10px; min-width: 220px;
+  border-width: 15px 42px; padding: 4px 10px; min-width: 190px;
   color: #241505; font-family: var(--font-display), Georgia, serif; font-weight: 700;
   font-size: 1.02rem; letter-spacing: .05em; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;

@@ -40,7 +40,7 @@ interface EndedInfo {
   won: boolean; gold: number; xp: number; levelUps: number;
   ratingDelta?: number; rating?: number; league?: string; pack?: string; firstClear?: boolean;
   /** campaign matches only — presence of `stars` switches to the campaign reward screen */
-  stars?: number;
+  stars?: number; bestStars?: number; maxStars?: number;
   starDetails?: CampaignStarDetail[];
   nodeId?: string; nodeName?: string; chapter?: number; chapterName?: string;
   shards?: number; packs?: PacksInput;
@@ -789,6 +789,7 @@ export default function PlayClient() {
           chapter={ended.chapter}
           chapterName={ended.chapterName}
           stars={ended.stars}
+          bestStars={ended.bestStars}
           starDetails={ended.starDetails}
           gold={ended.gold}
           shards={ended.shards}

@@ -25,7 +25,9 @@ import "./campaign-rewards.css";
 export interface CampaignStarDetail {
   /** objective text, e.g. "Win by turn 9." */
   label: string;
-  earned: boolean;
+  /** the server sends `achieved`; `earned` is accepted as an alias */
+  achieved?: boolean;
+  earned?: boolean;
   kind?: string;
 }
 
@@ -57,6 +59,8 @@ export interface CampaignRewardsProps {
   chapterName?: string;
   /** stars earned this run, 0-3 */
   stars: number;
+  /** best stars ever held on the node — shown when this run did not match the record */
+  bestStars?: number;
   starDetails?: CampaignStarDetail[];
   gold?: number;
   shards?: number;
@@ -82,7 +86,7 @@ const PACK_NAME: Record<string, string> = {
   grand: "Grand Pack",
 };
 /** ms between beats: star1, star2, star3, rewards, chapter act, actions. */
-const TIMELINE = [420, 520, 520, 560, 700, 420];
+const TIMELINE = [340, 430, 430, 480, 620, 380];
 const LAST_STEP = TIMELINE.length;
 
 /* --------------------------------------------------------------- helpers --- */
@@ -125,17 +129,15 @@ function prefersReducedMotion(): boolean {
 function useCountUp(target: number, active: boolean, duration = 850): number {
   const [value, setValue] = useState(0);
   useEffect(() => {
-    if (!active) {
-      setValue(0);
-      return;
-    }
-    if (target <= 0 || prefersReducedMotion()) {
-      setValue(target);
-      return;
-    }
+    if (!active || target <= 0) return;
+    const reduce = prefersReducedMotion();
     let raf = 0;
     const t0 = performance.now();
     const tick = (t: number) => {
+      if (reduce) {
+        setValue(target);
+        return;
+      }
       const p = Math.min(1, (t - t0) / duration);
       setValue(Math.round(target * (1 - Math.pow(1 - p, 3))));
       if (p < 1) raf = requestAnimationFrame(tick);
@@ -143,7 +145,8 @@ function useCountUp(target: number, active: boolean, duration = 850): number {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target, active, duration]);
-  return value;
+  if (!active) return 0;
+  return target <= 0 ? target : value;
 }
 
 /* ------------------------------------------------------------- sub-parts --- */
@@ -185,6 +188,7 @@ export default function CampaignRewards({
   chapter,
   chapterName,
   stars,
+  bestStars,
   starDetails,
   gold = 0,
   shards = 0,
@@ -202,8 +206,8 @@ export default function CampaignRewards({
 
   useEffect(() => {
     if (prefersReducedMotion()) {
-      setStep(LAST_STEP);
-      return;
+      const t = setTimeout(() => setStep(LAST_STEP), 0);
+      return () => clearTimeout(t);
     }
     const timers: ReturnType<typeof setTimeout>[] = [];
     let acc = 0;
@@ -225,15 +229,17 @@ export default function CampaignRewards({
   const earned = Math.max(0, Math.min(STARS_PER_NODE, Math.trunc(stars) || 0));
 
   /* three objective labels: from the payload, else recovered from the node id */
-  const objectives = useMemo<CampaignStarDetail[]>(() => {
-    const fallback = nodeId
-      ? objectivesFor(nodeId).map((o, i) => ({ label: o.label, earned: i < earned, kind: o.kind }))
+  const objectives = useMemo<{ label: string; earned: boolean }[]>(() => {
+    const fallback: { label: string; earned: boolean }[] = nodeId
+      ? objectivesFor(nodeId).map((o, i) => ({ label: o.label, earned: i < earned }))
       : [
           { label: "Win the battle.", earned: earned >= 1 },
           { label: "Complete the node challenge.", earned: earned >= 2 },
           { label: "Complete the mastery challenge.", earned: earned >= 3 },
         ];
-    const list = starDetails && starDetails.length ? starDetails : fallback;
+    const list = starDetails && starDetails.length
+      ? starDetails.map((d) => ({ label: d.label, earned: d.earned ?? d.achieved ?? false }))
+      : fallback;
     return Array.from({ length: STARS_PER_NODE }, (_, i) => list[i] ?? fallback[i]);
   }, [nodeId, starDetails, earned]);
 
@@ -308,6 +314,12 @@ export default function CampaignRewards({
           </p>
           <div className="crRule" aria-hidden="true"><i /><span>◆</span><i /></div>
         </header>
+
+        {bestStars !== undefined && bestStars > earned && (
+          <p className="crBest">
+            Best on this node: <b>{"★".repeat(bestStars)}</b>
+          </p>
+        )}
 
         {/* ---- act one: the three stars ---- */}
         <div className="crStars" data-testid="campaign-stars" data-stars={earned}>

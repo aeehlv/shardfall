@@ -212,10 +212,20 @@ function MenuInner() {
         <img className="seasonBanner" src="/ui/season-banner.png" alt="First Epoch — The Shattering" />
       </header>
 
-      <Link className="storeCorner" href="/store" data-testid="menu-store" title="Store">
-        <img src="/ui/btn-store.png" alt="Store" />
-        <span>Store</span>
-      </Link>
+      <div className="cornerRail">
+        <Link className="storeCorner" href="/collection" title="Collection">
+          <img src="/ui/btn-collection.png" alt="Collection" />
+          <span>Collection</span>
+        </Link>
+        <Link className="storeCorner" href="/leaderboard" data-testid="menu-leaderboard" title="Leaderboard">
+          <img src="/ui/btn-ladder.png" alt="Leaderboard" />
+          <span>Ladder</span>
+        </Link>
+        <Link className="storeCorner" href="/store" data-testid="menu-store" title="Store">
+          <img src="/ui/btn-store.png" alt="Store" />
+          <span>Store</span>
+        </Link>
+      </div>
       {wallet && (
         <div className="walletBar" data-testid="wallet">
           <span className="wRes"><img src="/ui/gold.png" alt="gold" /><b>{wallet.gold}</b></span>
@@ -265,13 +275,11 @@ function MenuInner() {
               Practice vs AI
             </button>
             <Link className="menuBtn" href="/campaign" data-testid="menu-campaign">Campaign</Link>
-            <Link className="menuBtn" href="/leaderboard" data-testid="menu-leaderboard">Leaderboard</Link>
             {!profile?.tutorialDone && (
               <Link className="menuBtn highlight" href="/play?deck=pyre&tutorial=1" data-testid="menu-tutorial">
                 Start Tutorial
               </Link>
             )}
-            <Link className="menuBtn" href="/collection">Collection</Link>
             <Link className="menuBtn dark" href="/friends" data-testid="menu-friends">Friends</Link>
           </>
         ) : (
