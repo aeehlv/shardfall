@@ -14,9 +14,13 @@ await page.type('[data-testid="auth-email"]', email);
 await page.type('[data-testid="auth-password"]', "secret123");
 await page.click('[data-testid="auth-submit"]');
 await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
-await sleep(1200);
-const skip = await page.$('[data-testid="intro-skip"]');
-if (skip) { await skip.click(); await sleep(400); }
+await sleep(1600);
+// new accounts land on the lore prologue, then the short intro
+for (const sel of ['[data-testid="lore-skip"]', '[data-testid="intro-skip"]']) {
+  const el = await page.$(sel);
+  if (el) { await el.click(); await sleep(600); }
+}
+await page.waitForSelector('[data-testid="menu-ranked"]', { timeout: 15000 }).catch(() => {});
 checks.push(["signed up & account chip shows", !!(await page.$('[data-testid="account"] b'))]);
 
 // --- ranked queue → bot fallback ------------------------------------------
@@ -97,7 +101,8 @@ checks.push(["friends page loads", !!nameInput]);
 if (nameInput) {
   await nameInput.type("Grimspark91");
   await page.click('[data-testid="friend-add"]');
-  await sleep(1500);
+  // the friends list refreshes on a 5s poll
+  await page.waitForSelector('[data-testid^="challenge-"]', { timeout: 12000 }).catch(() => {});
   const challenge = await page.$('[data-testid^="challenge-"]');
   checks.push(["bot friend added & challengeable", !!challenge]);
   if (challenge) {

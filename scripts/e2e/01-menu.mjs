@@ -24,9 +24,13 @@ await page.click('[data-testid="auth-submit"]');
 await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
 await sleep(1200);
 
-checks.push(["intro appears on first visit", !!(await page.$('[data-testid="intro"]'))]);
-await page.click('[data-testid="intro-skip"]');
-await sleep(400);
+// new accounts see the lore prologue first, then the short intro
+checks.push(["lore prologue for new account", !!(await page.$('[data-testid="lore-prologue"]'))]);
+const loreSkip = await page.$('[data-testid="lore-skip"]');
+if (loreSkip) { await loreSkip.click(); await sleep(700); }
+checks.push(["intro appears after the prologue", !!(await page.$('[data-testid="intro"]'))]);
+const introSkip = await page.$('[data-testid="intro-skip"]');
+if (introSkip) { await introSkip.click(); await sleep(500); }
 checks.push(["intro dismissed by skip", !(await page.$('[data-testid="intro"]'))]);
 checks.push(["wallet visible", !!(await page.$('[data-testid="wallet"]'))]);
 checks.push(["play button", !!(await page.$('[data-testid="menu-play"]'))]);
@@ -39,10 +43,11 @@ const deckCount = await page.evaluate(() =>
   Object.keys(JSON.parse(localStorage.getItem("shardfall-profile-v1") ?? "{}").decks ?? {}).length);
 checks.push(["3 starter decks granted", deckCount === 3]);
 
-// intro not shown on revisit
+// neither prologue nor intro on revisit
 await page.reload({ waitUntil: "networkidle0" });
-await sleep(600);
-checks.push(["intro skipped on revisit", !(await page.$('[data-testid="intro"]'))]);
+await sleep(900);
+checks.push(["prologue + intro skipped on revisit",
+  !(await page.$('[data-testid="intro"]')) && !(await page.$('[data-testid="lore-prologue"]'))]);
 
 // deck picker
 await page.click('[data-testid="menu-play"]');

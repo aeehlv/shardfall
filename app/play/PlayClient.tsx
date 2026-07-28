@@ -74,7 +74,7 @@ export default function PlayClient() {
   const [banner, setBanner] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [ended, setEnded] = useState<EndedInfo | null>(null);
-  const [zoomCard, setZoomCard] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [zoomCard, setZoomCard] = useState<{ id: string; x: number; y: number; src: "hand" | "board" } | null>(null);
   const [tutStep, setTutStep] = useState(0);
   const [timeLeft, setTimeLeft] = useState(TURN_SECONDS);
   const [deadline, setDeadline] = useState<number | null>(null);
@@ -96,6 +96,7 @@ export default function PlayClient() {
   const suppressClick = useRef(false);
   const seqRef = useRef(-1);
   const pollingRef = useRef(false);
+  const netChain = useRef<Promise<void>>(Promise.resolve());
   const gameRef = useRef<GameState | null>(null);
 
   useEffect(() => { gameRef.current = game; }, [game]);
@@ -181,6 +182,12 @@ export default function PlayClient() {
           break;
         case "SPELL_CAST": {
           playSfx("spell", 0.5);
+          if (ev.player === 0 && ev.cardId) {
+            // brief flourish so a spell that hits the hero directly still reads
+            setReveal(ev.cardId);
+            await sleep(430);
+            setReveal(null);
+          }
           spellFrom = rectCenter(boardRef.current?.querySelector(
             ev.player === 0 ? ".heroCorner.mine" : ".heroCorner.foe"));
           break;
@@ -206,10 +213,10 @@ export default function PlayClient() {
             el.style.setProperty("--lx", `${dx}px`);
             el.style.setProperty("--ly", `${dy}px`);
             el.classList.add("lunging");
-            await sleep(300);
+            await sleep(ev.player === 0 ? 230 : 300);
             el.classList.remove("lunging");
-            await sleep(170); // return to formation before any death plays
-            if (ev.player === 1) await sleep(220); // let each enemy strike land separately
+            await sleep(ev.player === 0 ? 110 : 170); // home before any death plays
+            if (ev.player === 1) await sleep(200); // let each enemy strike land separately
           }
           const hit = ev.targetUid !== undefined
             ? unitRefs.current.get(ev.targetUid)
@@ -233,7 +240,7 @@ export default function PlayClient() {
           }
           if (ev.targetUid !== undefined) pushFx(String(ev.targetUid), { key: fxKey++, text: `-${ev.amount}`, kind: "damage" });
           else if (ev.player !== undefined) pushFx(`hero${ev.player}`, { key: fxKey++, text: `-${ev.amount}`, kind: "damage" });
-          await sleep(210);
+          await sleep(140);
           break;
         }
         case "HEAL": {
@@ -258,7 +265,7 @@ export default function PlayClient() {
           playSfx("shatter", 0.5);
           if (pt) spawnSprite("shatter", pt.x, pt.y, 165, 700);
           setDying((s) => new Set(s).add(ev.uid));
-          await sleep(320);
+          await sleep(240);
           step(ev);
           break;
         }
@@ -352,13 +359,45 @@ export default function PlayClient() {
     if (!game || busy || game.winner !== null || game.active !== 0 || endedRef.current) return;
     setSelCard(null); setSelAttacker(null);
     if (online && matchId) {
-      setBusy(true);
-      const view = await postMatchAction(matchId, { action, since: seqRef.current });
-      if (view.error) {
-        setToast(view.error); setTimeout(() => setToast(null), 1500);
-      } else {
-        await absorbView(view);
+      // Optimistic play: run the same deterministic engine locally so the card
+      // lands the instant it is released, then reconcile with the server.
+      // Only for plays/attacks — END_TURN pulls in the opponent's whole turn.
+      const optimistic = action.type !== "END_TURN" ? applyAction(game, action) : null;
+      if (optimistic?.error) {
+        setToast(optimistic.error);
+        setTimeout(() => setToast(null), 1500);
+        return;
       }
+      const skip = optimistic ? optimistic.events.length : 0;
+
+      // Confirm with the server in the background, one request at a time.
+      const send = async () => {
+        const view = await postMatchAction(matchId, { action, since: seqRef.current });
+        if (view.error) {
+          setToast(view.error);
+          setTimeout(() => setToast(null), 1600);
+          const resync = await fetchMatch(matchId, -1);
+          if (!resync.error) { seqRef.current = resync.seq; setGame(resync.state); gameRef.current = resync.state; }
+          return;
+        }
+        // the server replays our own events too — don't animate them twice
+        const rest = skip > 0 && view.events.length >= skip ? view.events.slice(skip) : view.events;
+        await absorbView({ ...view, events: rest });
+      };
+
+      if (optimistic) {
+        // Play it out locally right now, then hand control straight back —
+        // waiting on the round-trip is what made the board feel sticky.
+        setBusy(true);
+        await animate({ state: optimistic.state, events: optimistic.events }, false);
+        setBusy(false);
+        netChain.current = netChain.current.then(send).catch(() => {});
+        return;
+      }
+
+      setBusy(true);
+      netChain.current = netChain.current.then(send).catch(() => {});
+      await netChain.current;
       setBusy(false);
       return;
     }
@@ -611,7 +650,7 @@ export default function PlayClient() {
               legalTarget={(selCard !== null && legalCardTargets.includes(u.uid)) || (selAttacker !== null && attackTargets.includes(u.uid))}
               dying={dying.has(u.uid)}
               spawning={spawning.has(u.uid)}
-              onHover={(id, el) => setZoomCard(id && el ? { id, ...rectCenter(el)! } : null)}
+              onHover={(id, el) => setZoomCard(id && el ? { id, ...rectCenter(el)!, src: "board" } : null)}
               onClick={() => clickEnemyUnit(u.uid)}
               fx={fxMap[String(u.uid)]}
             />
@@ -628,7 +667,7 @@ export default function PlayClient() {
               spawning={spawning.has(u.uid)}
               resting={myTurn && legalAttackTargets(game, u.uid).length === 0 &&
                 (u.attacksLeft <= 0 || (u.enteredTurn === game.turn && !u.keywords.includes("rush")))}
-              onHover={(id, el) => setZoomCard(id && el ? { id, ...rectCenter(el)! } : null)}
+              onHover={(id, el) => setZoomCard(id && el ? { id, ...rectCenter(el)!, src: "board" } : null)}
               onClick={() => clickMyUnit(u.uid)}
               fx={fxMap[String(u.uid)]}
             />
@@ -661,7 +700,7 @@ export default function PlayClient() {
               <div key={`${id}-${i}`}
                 ref={(el) => { if (el) handRefs.current.set(i, el); else handRefs.current.delete(i); }}
                 className={`handSlot${selCard === i ? " selectedCard" : ""}${drag?.index === i ? " dragging" : ""}`}
-                onMouseEnter={(e) => setZoomCard({ id, ...rectCenter(e.currentTarget)! })}
+                onMouseEnter={(e) => setZoomCard({ id, ...rectCenter(e.currentTarget)!, src: "hand" })}
                 onMouseLeave={() => setZoomCard(null)}
                 onPointerDown={(e) => {
                   if (!myTurn) return;
@@ -732,12 +771,12 @@ export default function PlayClient() {
       {zoomCard && zoomDef && !busy && !drag && (() => {
         const vw = typeof window !== "undefined" ? window.innerWidth : 1500;
         const vh = typeof window !== "undefined" ? window.innerHeight : 1000;
-        const enemySide = zoomCard.y < vh * 0.45;
-        const style: React.CSSProperties = enemySide
+        const beside = zoomCard.src === "board";
+        const style: React.CSSProperties = beside
           ? {
-              // sit beside the enemy unit so the battlefield stays visible
+              // sit beside the unit so the battlefield stays visible
               left: zoomCard.x < vw / 2 ? zoomCard.x + 250 : zoomCard.x - 250,
-              top: Math.max(220, Math.min(zoomCard.y + 40, vh - 230)),
+              top: Math.max(215, Math.min(zoomCard.y, vh - 215)),
               transform: "translate(-50%, -50%)",
             }
           : {
@@ -746,7 +785,7 @@ export default function PlayClient() {
               transform: "translate(-50%, -100%)",
             };
         return (
-          <div className={`zoomPop${enemySide ? " enemySide" : ""}`} style={style}>
+          <div className={`zoomPop${beside ? " besideUnit" : ""}`} style={style}>
             {FRAMED_FACTIONS.has(zoomDef.faction)
               ? <FramedCard card={zoomDef} width={300} />
               : <div className="zoomFallback"><CardFace card={zoomDef} /></div>}

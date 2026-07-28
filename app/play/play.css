@@ -628,10 +628,10 @@
 .endRating .leagueBadge { font-size: .8rem; }
 .endRating .leagueCrestSm { width: 22px; height: 22px; }
 
-/* enemy unit inspection reads as "theirs" */
-.zoomPop.enemySide {
+/* board-unit inspection floats beside the unit */
+.zoomPop.besideUnit {
   animation: zoomPopSide .16s ease-out;
-  filter: drop-shadow(0 20px 46px rgba(0,0,0,.8)) drop-shadow(0 0 26px rgba(224,86,47,.35));
+  filter: drop-shadow(0 20px 46px rgba(0,0,0,.85)) drop-shadow(0 0 24px rgba(227,164,74,.3));
 }
 @keyframes zoomPopSide { from { opacity: 0; transform: translate(-50%, -50%) scale(.9); } }
 
