@@ -21,7 +21,7 @@ export async function GET() {
       { $match: { a: player.id } },
       { $lookup: { from: "players", localField: "b", foreignField: "_id", as: "p" } },
       { $unwind: "$p" },
-      { $project: { _id: 0, id: "$p._id", name: "$p.name", rating: "$p.rating", league: "$p.league", isBot: "$p.isBot" } },
+      { $project: { _id: 0, id: "$p._id", name: "$p.name", rating: "$p.rating", league: "$p.league" } },
     ]).toArray(),
     requestsC.aggregate([
       { $match: { toId: player.id } },

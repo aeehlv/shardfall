@@ -26,7 +26,6 @@ interface LadderRow {
   league: string;
   wins: number;
   losses: number;
-  isBot: number;
 }
 
 function intParam(raw: string | null, fallback: number): number {
@@ -58,7 +57,6 @@ const PROJECT_ROW: Document = {
   league: 1,
   wins: 1,
   losses: 1,
-  isBot: 1,
 };
 
 export async function GET(req: Request) {
@@ -104,7 +102,7 @@ export async function GET(req: Request) {
       // multiplier, so the key can never bleed across rating bands.
       {
         $project: {
-          name: 1, rating: 1, league: 1, wins: 1, losses: 1, isBot: 1,
+          name: 1, rating: 1, league: 1, wins: 1, losses: 1,
           _rankKey: {
             $subtract: [{ $multiply: [{ $ifNull: ["$rating", 0] }, 1_000_000_000] }, "$_id"],
           },

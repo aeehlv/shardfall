@@ -169,7 +169,7 @@ export default function Landing() {
             alt="First Epoch: The Shattering"
           />
           <p className="ld-hero-hook">
-            The world broke into song. Everyone wants the pieces.
+            The world broke into pieces. Everyone wants a shard.
           </p>
           <div className="ld-hero-ctas">
             <Link

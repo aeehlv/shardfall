@@ -12,7 +12,7 @@ import "./leaderboard.css";
 
 type Row = {
   rank: number; id: number; name: string; rating: number;
-  league: string; wins: number; losses: number; isBot: number;
+  league: string; wins: number; losses: number;
 };
 type Payload = { rows: Row[]; total: number; page: number; pageSize: number; me: Row | null };
 

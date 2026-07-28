@@ -16,7 +16,7 @@ export interface MatchView {
   state: GameState;
   events: GameEvent[];
   rewards?: FinishRewards;
-  opponent: { name: string; rating: number; league: string; isBot: boolean } | null;
+  opponent: { name: string; rating: number; league: string } | null;
   error?: string;
 }
 

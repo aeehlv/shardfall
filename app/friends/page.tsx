@@ -15,7 +15,7 @@ type Player = {
   id: number; name: string; rating: number; league: string;
   gold: number; shards: number; level: number; wins: number; losses: number;
 };
-type Friend = { id: number; name: string; rating: number; league: string; isBot: number };
+type Friend = { id: number; name: string; rating: number; league: string };
 type FriendRequest = { fromId: number; name: string; rating: number; league: string };
 type BattleInvite = { id: string; fromId: number; name: string };
 type OutgoingInvite = { id: string; toId: number; name: string; status: string; matchId: string | null };
@@ -321,7 +321,6 @@ export default function FriendsPage() {
               {social?.friends.map((f) => (
                 <div className="fRow" key={f.id}>
                   <span className="fName">{f.name}</span>
-                  {!!f.isBot && <span className="botTag">Bot</span>}
                   <LeagueBadge league={f.league} />
                   <span className="fRating"><b>{f.rating}</b> rating</span>
                   <div className="fActions">

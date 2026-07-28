@@ -457,7 +457,8 @@ export async function stateView(m: MatchRow, playerId: number, since: number) {
     state: view,
     events,
     rewards,
-    opponent: opp ? { name: opp.name, rating: opp.rating, league: opp.league, isBot: !!opp.isBot } : null,
+    // Opponents are presented identically whether human or AI-driven.
+    opponent: opp ? { name: opp.name, rating: opp.rating, league: opp.league } : null,
   };
 }
 

@@ -29,7 +29,7 @@ export default function Intro({ onDone }: { onDone: () => void }) {
       <div className="introTitle">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img className="introWordmark" src="/ui/wordmark.png" alt="Shardfall" />
-        <p>The world broke into song. Everyone wants the pieces.</p>
+        <p>The world broke into pieces. Everyone wants a shard.</p>
       </div>
 
       <div className="introTriptych">
