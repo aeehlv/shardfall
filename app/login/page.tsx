@@ -91,8 +91,8 @@ export default function LoginPage() {
       <Link className="loginBack" href="/">← Menu</Link>
 
       <section className="loginPanel">
-        <h1 className="loginTitle">Shardfall</h1>
-        <p className="loginSub">The shards remember every duelist.</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="loginLogo" src="/ui/logo-epic.png" alt="Shardfall" />
 
         {isPending ? (
           <p className="loginPending">Consulting the shards…</p>

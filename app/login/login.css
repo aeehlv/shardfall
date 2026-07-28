@@ -137,3 +137,10 @@
   font-size: .92rem; letter-spacing: .05em; text-shadow: 0 1px 3px rgba(0,0,0,.8);
 }
 .loginGhost:hover { filter: brightness(1.14); }
+
+/* generated wordmark replaces the html heading */
+.loginLogo {
+  display: block; width: min(300px, 70%); max-height: 16vh; object-fit: contain;
+  margin: 0 auto 14px;
+  filter: drop-shadow(0 6px 20px rgba(0,0,0,.75)) drop-shadow(0 0 24px rgba(227,164,74,.22));
+}
