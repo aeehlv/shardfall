@@ -1,5 +1,7 @@
-import { db, leagueFor } from "./db";
+import { leagueFor, nextPlayerId, playersCol, type PlayerDoc } from "./db";
 
+/** App-level view of a player document. `id` mirrors the Mongo `_id`.
+ *  packs / collection / decks are REAL OBJECTS (they were JSON strings under SQLite). */
 export interface PlayerRow {
   id: number;
   userId: string | null;
@@ -13,45 +15,102 @@ export interface PlayerRow {
   level: number;
   wins: number;
   losses: number;
-  packs: string;
-  collection: string;
-  decks: string;
+  packs: Record<string, number>;
+  collection: Record<string, number>;
+  decks: Record<string, string[]>;
+  createdAt?: number;
 }
 
-export function getPlayerByUserId(userId: string): PlayerRow | undefined {
-  return db.prepare("SELECT * FROM players WHERE userId = ?").get(userId) as PlayerRow | undefined;
+/** Fields a caller may hand to updatePlayer (everything except the id). */
+export type PlayerUpdate = Partial<Omit<PlayerRow, "id">>;
+
+export const PLAYER_DEFAULTS = {
+  isBot: 0,
+  rating: 1000,
+  league: "Bronze",
+  gold: 300,
+  shards: 20,
+  xp: 0,
+  level: 1,
+  wins: 0,
+  losses: 0,
+} as const;
+
+/** _id → id, plus defaults for documents written before a field existed. */
+export function toPlayerRow(doc: PlayerDoc): PlayerRow {
+  return {
+    id: doc._id,
+    userId: doc.userId ?? null,
+    name: doc.name,
+    isBot: doc.isBot ?? 0,
+    rating: doc.rating ?? PLAYER_DEFAULTS.rating,
+    league: doc.league ?? leagueFor(doc.rating ?? PLAYER_DEFAULTS.rating),
+    gold: doc.gold ?? PLAYER_DEFAULTS.gold,
+    shards: doc.shards ?? PLAYER_DEFAULTS.shards,
+    xp: doc.xp ?? 0,
+    level: doc.level ?? 1,
+    wins: doc.wins ?? 0,
+    losses: doc.losses ?? 0,
+    packs: doc.packs ?? {},
+    collection: doc.collection ?? {},
+    decks: doc.decks ?? {},
+    createdAt: doc.createdAt,
+  };
 }
 
-export function getPlayerById(id: number): PlayerRow | undefined {
-  return db.prepare("SELECT * FROM players WHERE id = ?").get(id) as PlayerRow | undefined;
+export async function getPlayerByUserId(userId: string): Promise<PlayerRow | undefined> {
+  const doc = await (await playersCol()).findOne({ userId });
+  return doc ? toPlayerRow(doc) : undefined;
 }
 
-export function ensurePlayerForUser(userId: string, name: string): PlayerRow {
-  const existing = getPlayerByUserId(userId);
+export async function getPlayerById(id: number): Promise<PlayerRow | undefined> {
+  const doc = await (await playersCol()).findOne({ _id: id });
+  return doc ? toPlayerRow(doc) : undefined;
+}
+
+export async function ensurePlayerForUser(userId: string, name: string): Promise<PlayerRow> {
+  const existing = await getPlayerByUserId(userId);
   if (existing) return existing;
-  const info = db
-    .prepare("INSERT INTO players (userId, name, isBot) VALUES (?, ?, 0)")
-    .run(userId, name.slice(0, 24) || "Duelist");
-  return getPlayerById(Number(info.lastInsertRowid))!;
+
+  const doc: PlayerDoc = {
+    _id: await nextPlayerId(),
+    userId,
+    name: name.slice(0, 24) || "Duelist",
+    ...PLAYER_DEFAULTS,
+    packs: {},
+    collection: {},
+    decks: {},
+    createdAt: Date.now(),
+  };
+  try {
+    await (await playersCol()).insertOne(doc);
+  } catch (err) {
+    // Two concurrent requests for a brand-new user: the unique userId index wins,
+    // the loser just reads the row the winner wrote.
+    if ((err as { code?: number }).code !== 11000) throw err;
+    const raced = await getPlayerByUserId(userId);
+    if (raced) return raced;
+    throw err;
+  }
+  return toPlayerRow(doc);
 }
 
-export function updatePlayer(id: number, fields: Partial<Record<keyof PlayerRow, unknown>>) {
+export async function updatePlayer(id: number, fields: PlayerUpdate): Promise<void> {
   const keys = Object.keys(fields);
   if (!keys.length) return;
-  const sets = keys.map((k) => `${k} = @${k}`).join(", ");
-  db.prepare(`UPDATE players SET ${sets} WHERE id = ${id}`).run(fields as Record<string, unknown>);
+  await (await playersCol()).updateOne({ _id: id }, { $set: fields as Partial<PlayerDoc> });
 }
 
-export function grantPacks(id: number, size: "small" | "standard" | "grand", count: number) {
-  const p = getPlayerById(id);
-  if (!p) return;
-  const packs = JSON.parse(p.packs || "{}");
-  packs[size] = (packs[size] ?? 0) + count;
-  updatePlayer(id, { packs: JSON.stringify(packs) });
+export async function grantPacks(
+  id: number, size: "small" | "standard" | "grand", count: number,
+): Promise<void> {
+  await (await playersCol()).updateOne({ _id: id }, { $inc: { [`packs.${size}`]: count } });
 }
 
-export function addXpGold(id: number, gold: number, xp: number, won: boolean): { levelUps: number; level: number } {
-  const p = getPlayerById(id)!;
+export async function addXpGold(
+  id: number, gold: number, xp: number, won: boolean,
+): Promise<{ levelUps: number; level: number }> {
+  const p = (await getPlayerById(id))!;
   let level = p.level;
   let curXp = p.xp + xp;
   let levelUps = 0;
@@ -60,23 +119,23 @@ export function addXpGold(id: number, gold: number, xp: number, won: boolean): {
     level += 1;
     levelUps += 1;
   }
-  updatePlayer(id, {
+  await updatePlayer(id, {
     gold: p.gold + gold, xp: curXp, level,
     wins: p.wins + (won ? 1 : 0), losses: p.losses + (won ? 0 : 1),
   });
-  if (levelUps > 0) grantPacks(id, "standard", levelUps);
+  if (levelUps > 0) await grantPacks(id, "standard", levelUps);
   return { levelUps, level };
 }
 
 /** Elo update; returns delta applied to `a` (b gets -delta). */
-export function applyElo(aId: number, bId: number, aWon: boolean, k = 32): number {
-  const a = getPlayerById(aId)!;
-  const b = getPlayerById(bId)!;
+export async function applyElo(aId: number, bId: number, aWon: boolean, k = 32): Promise<number> {
+  const a = (await getPlayerById(aId))!;
+  const b = (await getPlayerById(bId))!;
   const expA = 1 / (1 + Math.pow(10, (b.rating - a.rating) / 400));
   const delta = Math.round(k * ((aWon ? 1 : 0) - expA));
   const newA = Math.max(400, a.rating + delta);
   const newB = Math.max(400, b.rating - delta);
-  updatePlayer(aId, { rating: newA, league: leagueFor(newA) });
-  updatePlayer(bId, { rating: newB, league: leagueFor(newB) });
+  await updatePlayer(aId, { rating: newA, league: leagueFor(newA) });
+  await updatePlayer(bId, { rating: newB, league: leagueFor(newB) });
   return delta;
 }

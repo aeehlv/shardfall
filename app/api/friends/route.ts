@@ -1,24 +1,50 @@
 import { NextResponse } from "next/server";
 import { sessionPlayer } from "@/lib/server/session";
-import { db } from "@/lib/server/db";
+import { battleInvitesCol, friendRequestsCol, friendsCol, playersCol } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
+
+/** Escape a user string so it can be used inside a RegExp literally. */
+function rx(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export async function GET() {
   const player = await sessionPlayer();
   if (!player) return NextResponse.json({ error: "Login required" }, { status: 401 });
-  const friends = db.prepare(
-    `SELECT p.id, p.name, p.rating, p.league, p.isBot FROM friends f JOIN players p ON p.id = f.b WHERE f.a = ?`,
-  ).all(player.id);
-  const requests = db.prepare(
-    `SELECT r.fromId, p.name, p.rating, p.league FROM friend_requests r JOIN players p ON p.id = r.fromId WHERE r.toId = ?`,
-  ).all(player.id);
-  const invites = db.prepare(
-    `SELECT i.id, i.fromId, i.matchId, i.status, p.name FROM battle_invites i JOIN players p ON p.id = i.fromId WHERE i.toId = ? AND i.status = 'pending'`,
-  ).all(player.id);
-  const outgoing = db.prepare(
-    `SELECT i.id, i.toId, i.matchId, i.status, p.name FROM battle_invites i JOIN players p ON p.id = i.toId WHERE i.fromId = ? AND i.createdAt > ? ORDER BY i.createdAt DESC LIMIT 5`,
-  ).all(player.id, Date.now() - 3600_000);
+  const [friendsC, requestsC, invitesC] = await Promise.all([
+    friendsCol(), friendRequestsCol(), battleInvitesCol(),
+  ]);
+
+  const [friends, requests, invites, outgoing] = await Promise.all([
+    friendsC.aggregate([
+      { $match: { a: player.id } },
+      { $lookup: { from: "players", localField: "b", foreignField: "_id", as: "p" } },
+      { $unwind: "$p" },
+      { $project: { _id: 0, id: "$p._id", name: "$p.name", rating: "$p.rating", league: "$p.league", isBot: "$p.isBot" } },
+    ]).toArray(),
+    requestsC.aggregate([
+      { $match: { toId: player.id } },
+      { $lookup: { from: "players", localField: "fromId", foreignField: "_id", as: "p" } },
+      { $unwind: "$p" },
+      { $project: { _id: 0, fromId: 1, name: "$p.name", rating: "$p.rating", league: "$p.league" } },
+    ]).toArray(),
+    invitesC.aggregate([
+      { $match: { toId: player.id, status: "pending" } },
+      { $lookup: { from: "players", localField: "fromId", foreignField: "_id", as: "p" } },
+      { $unwind: "$p" },
+      { $project: { _id: 0, id: { $toString: "$_id" }, fromId: 1, matchId: 1, status: 1, name: "$p.name" } },
+    ]).toArray(),
+    invitesC.aggregate([
+      { $match: { fromId: player.id, createdAt: { $gt: Date.now() - 3600_000 } } },
+      { $sort: { createdAt: -1 } },
+      { $limit: 5 },
+      { $lookup: { from: "players", localField: "toId", foreignField: "_id", as: "p" } },
+      { $unwind: "$p" },
+      { $project: { _id: 0, id: { $toString: "$_id" }, toId: 1, matchId: 1, status: 1, name: "$p.name" } },
+    ]).toArray(),
+  ]);
+
   return NextResponse.json({ friends, requests, invites, outgoing });
 }
 
@@ -26,15 +52,27 @@ export async function POST(req: Request) {
   const player = await sessionPlayer();
   if (!player) return NextResponse.json({ error: "Login required" }, { status: 401 });
   const { name } = await req.json();
-  const target = db.prepare("SELECT id, isBot FROM players WHERE name = ? COLLATE NOCASE").get(String(name)) as { id: number; isBot: number } | undefined;
+  // `COLLATE NOCASE` equivalent: an anchored, case-insensitive exact match.
+  const target = await (await playersCol()).findOne(
+    { name: { $regex: `^${rx(String(name))}$`, $options: "i" } },
+    { projection: { isBot: 1 } },
+  );
   if (!target) return NextResponse.json({ error: "No player with that name" }, { status: 404 });
-  if (target.id === player.id) return NextResponse.json({ error: "That's you" }, { status: 400 });
-  db.prepare("INSERT OR IGNORE INTO friend_requests (fromId, toId) VALUES (?, ?)").run(player.id, target.id);
+  if (target._id === player.id) return NextResponse.json({ error: "That's you" }, { status: 400 });
+
+  const requests = await friendRequestsCol();
+  const friends = await friendsCol();
+  // upsert == INSERT OR IGNORE (unique {fromId, toId})
+  await requests.updateOne(
+    { fromId: player.id, toId: target._id },
+    { $setOnInsert: { createdAt: Date.now() } },
+    { upsert: true },
+  );
   // bots auto-accept so the feature is testable locally
   if (target.isBot) {
-    db.prepare("DELETE FROM friend_requests WHERE fromId=? AND toId=?").run(player.id, target.id);
-    db.prepare("INSERT OR IGNORE INTO friends (a, b) VALUES (?, ?)").run(player.id, target.id);
-    db.prepare("INSERT OR IGNORE INTO friends (a, b) VALUES (?, ?)").run(target.id, player.id);
+    await requests.deleteOne({ fromId: player.id, toId: target._id });
+    await friends.updateOne({ a: player.id, b: target._id }, { $setOnInsert: { a: player.id, b: target._id } }, { upsert: true });
+    await friends.updateOne({ a: target._id, b: player.id }, { $setOnInsert: { a: target._id, b: player.id } }, { upsert: true });
     return NextResponse.json({ accepted: true });
   }
   return NextResponse.json({ requested: true });
@@ -44,10 +82,12 @@ export async function PATCH(req: Request) {
   const player = await sessionPlayer();
   if (!player) return NextResponse.json({ error: "Login required" }, { status: 401 });
   const { fromId, accept } = await req.json();
-  db.prepare("DELETE FROM friend_requests WHERE fromId=? AND toId=?").run(fromId, player.id);
+  const from = Number(fromId);
+  await (await friendRequestsCol()).deleteOne({ fromId: from, toId: player.id });
   if (accept) {
-    db.prepare("INSERT OR IGNORE INTO friends (a, b) VALUES (?, ?)").run(player.id, fromId);
-    db.prepare("INSERT OR IGNORE INTO friends (a, b) VALUES (?, ?)").run(fromId, player.id);
+    const friends = await friendsCol();
+    await friends.updateOne({ a: player.id, b: from }, { $setOnInsert: { a: player.id, b: from } }, { upsert: true });
+    await friends.updateOne({ a: from, b: player.id }, { $setOnInsert: { a: from, b: player.id } }, { upsert: true });
   }
   return NextResponse.json({ ok: true });
 }

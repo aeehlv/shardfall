@@ -12,13 +12,13 @@ export async function POST(req: Request) {
   if (!player) return NextResponse.json({ error: "Login required" }, { status: 401 });
   const { size } = await req.json();
   if (!SIZES[size]) return NextResponse.json({ error: "Unknown pack" }, { status: 400 });
-  const fresh = getPlayerById(player.id)!;
-  const packs = JSON.parse(fresh.packs || "{}");
+  const fresh = (await getPlayerById(player.id))!;
+  const packs = { ...(fresh.packs ?? {}) };
   if (!packs[size] || packs[size] < 1) return NextResponse.json({ error: "No packs of that size" }, { status: 400 });
   packs[size] -= 1;
   const cards = rollPack(CARD_POOL, SIZES[size]);
-  const collection = JSON.parse(fresh.collection || "{}");
+  const collection = { ...(fresh.collection ?? {}) };
   for (const id of cards) collection[id] = (collection[id] ?? 0) + 1;
-  updatePlayer(player.id, { packs: JSON.stringify(packs), collection: JSON.stringify(collection) });
+  await updatePlayer(player.id, { packs, collection });
   return NextResponse.json({ cards, packs });
 }

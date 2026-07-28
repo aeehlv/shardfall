@@ -149,7 +149,8 @@ export default function LeaderboardPage() {
       <Link className="lbBack" href="/">← Menu</Link>
 
       <header className="lbHeader">
-        <h1>Leaderboard</h1>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="lbTitleArt" src="/ui/title-leaderboard.png" alt="Leaderboard" />
         <p>The standing of every duelist in Kelvarrow, measured shard by shard.</p>
       </header>
 
@@ -157,6 +158,7 @@ export default function LeaderboardPage() {
         <div className="lbTabs" role="tablist" aria-label="League filter">
           <button
             className={`lbTab${league === ALL ? " active" : ""}`}
+            data-league="All"
             style={{ "--lg": "#e3a44a" } as CSSProperties}
             role="tab" aria-selected={league === ALL}
             data-testid={`lb-tab-${ALL}`}

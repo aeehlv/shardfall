@@ -298,3 +298,10 @@
 .lbTab[data-league="Legend"]  { --crest: url("/ui/leagues/legend.png"); }
 .lbMeBar .lbCrest { width: 26px; height: 26px; }
 tr.lbRowMe .lbCrest { filter: drop-shadow(0 0 6px rgba(227,164,74,.7)); }
+
+/* generated header art */
+.lbTitleArt {
+  display: block; width: min(560px, 82vw); margin: 4px auto 6px;
+  filter: drop-shadow(0 6px 24px rgba(0,0,0,.8)) drop-shadow(0 0 26px rgba(227,164,74,.22));
+}
+.lbTab[data-league="All"] { --crest: url("/ui/leagues/all.png"); }

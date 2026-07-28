@@ -17,8 +17,8 @@ type Player = {
 };
 type Friend = { id: number; name: string; rating: number; league: string; isBot: number };
 type FriendRequest = { fromId: number; name: string; rating: number; league: string };
-type BattleInvite = { id: number; fromId: number; name: string };
-type OutgoingInvite = { id: number; toId: number; name: string; status: string; matchId: number | null };
+type BattleInvite = { id: string; fromId: number; name: string };
+type OutgoingInvite = { id: string; toId: number; name: string; status: string; matchId: string | null };
 type Social = { friends: Friend[]; requests: FriendRequest[]; invites: BattleInvite[]; outgoing: OutgoingInvite[] };
 
 const LEAGUE_COLORS: Record<string, string> = {
@@ -69,10 +69,10 @@ export default function FriendsPage() {
   const [addName, setAddName] = useState("");
   const [adding, setAdding] = useState(false);
   const [plaque, setPlaque] = useState<{ ok: boolean; text: string } | null>(null);
-  const [picker, setPicker] = useState<{ kind: "challenge" | "invite"; id: number } | null>(null);
+  const [picker, setPicker] = useState<{ kind: "challenge" | "invite"; id: number | string } | null>(null);
 
   const plaqueTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingOutgoing = useRef<Set<number>>(new Set());
+  const pendingOutgoing = useRef<Set<string>>(new Set());
   const navigated = useRef(false);
 
   const goToMatch = useCallback((matchId: number | string) => {
@@ -176,7 +176,7 @@ export default function FriendsPage() {
     }
   };
 
-  const answerInvite = async (id: number, accept: boolean, faction?: FactionId) => {
+  const answerInvite = async (id: string, accept: boolean, faction?: FactionId) => {
     setPicker(null);
     try {
       const res = await fetch("/api/friends/battle", {
