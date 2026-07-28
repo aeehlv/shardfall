@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CARD_POOL } from "@/lib/game/pool";
 import { buildStarterDeck, starterDeckName } from "@/lib/game/decks";
+import { playableBoards } from "@/lib/game/boards";
 import { addCards, loadProfile, saveProfile, STARTER_DECK_VERSION, type Profile } from "@/lib/profile";
 import { rollPack, PACK_ODDS } from "@/lib/game/packs";
 import { getCard } from "@/lib/game/engine";
@@ -48,6 +49,7 @@ function MenuInner() {
   const [activeMatches, setActiveMatches] = useState<{ id: string; kind: string }[]>([]);
   const [showIntro, setShowIntro] = useState(false);
   const [pickDeck, setPickDeck] = useState(false);
+  const [practiceDeck, setPracticeDeck] = useState<FactionId | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [queueing, setQueueing] = useState(false);
   const [queueFaction, setQueueFaction] = useState<FactionId | null>(null);
@@ -290,7 +292,8 @@ function MenuInner() {
             <button className="menuBtn primary" data-testid="menu-ranked" onClick={openRanked}>
               Ranked Battle
             </button>
-            <button className="menuBtn" data-testid="menu-play" onClick={() => setPickDeck(true)}>
+            <button className="menuBtn" data-testid="menu-play"
+              onClick={() => { setPracticeDeck(null); setPickDeck(true); }}>
               Practice vs AI
             </button>
             <Link className="menuBtn" href="/campaign" data-testid="menu-campaign">Campaign</Link>
@@ -302,21 +305,39 @@ function MenuInner() {
             <Link className="menuBtn dark" href="/friends" data-testid="menu-friends">Friends</Link>
           </>
         ) : (
-          <div className="deckPick">
-            <h2>Choose your deck</h2>
-            <div className="deckRow">
-              {FACTIONS.map((f) => (
-                <Link key={f.id} className="deckChoice"
-                  style={{ "--dc-glow": `${f.accent}88`, color: f.accent } as React.CSSProperties}
-                  href={`/play?deck=${f.id}`} data-testid={`deck-${f.id}`}>
-                  <img src={`/cards/art/${f.id}.jpg`} alt="" />
-                  <b style={{ color: f.accent }}>{starterDeckName(f.id)}</b>
-                  <span>{f.blurb}</span>
-                </Link>
-              ))}
+          practiceDeck === null ? (
+            <div className="deckPick">
+              <h2>Choose your deck</h2>
+              <div className="deckRow">
+                {FACTIONS.map((f) => (
+                  <button key={f.id} className="deckChoice"
+                    style={{ "--dc-glow": `${f.accent}88`, color: f.accent } as React.CSSProperties}
+                    onClick={() => setPracticeDeck(f.id)} data-testid={`deck-${f.id}`}>
+                    <img src={`/cards/art/${f.id}.jpg`} alt="" />
+                    <b style={{ color: f.accent }}>{starterDeckName(f.id)}</b>
+                    <span>{f.blurb}</span>
+                  </button>
+                ))}
+              </div>
+              <button className="menuSmall" onClick={() => setPickDeck(false)}>← back</button>
             </div>
-            <button className="menuSmall" onClick={() => setPickDeck(false)}>← back</button>
-          </div>
+          ) : (
+            <div className="deckPick">
+              <h2>Choose the battlefield</h2>
+              <div className="boardRowPick">
+                {playableBoards().map((bd) => (
+                  <Link key={bd.slug} className="boardChoice"
+                    href={`/play?deck=${practiceDeck}&board=${bd.slug}`}
+                    data-testid={`board-${bd.slug}`}>
+                    <img src={`/board/${bd.slug}.jpg`} alt="" />
+                    <b>{bd.name}</b>
+                    <span>{bd.blurb}</span>
+                  </Link>
+                ))}
+              </div>
+              <button className="menuSmall" onClick={() => setPracticeDeck(null)}>← back</button>
+            </div>
+          )
         )}
       </nav>
 

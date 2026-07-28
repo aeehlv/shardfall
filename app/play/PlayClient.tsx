@@ -6,6 +6,7 @@ import { CARD_POOL } from "@/lib/game/pool";
 import { applyAction, getCard, legalAttackTargets, legalEffectTargets, newGame } from "@/lib/game/engine";
 import { aiTakeTurn } from "@/lib/game/ai";
 import { buildStarterDeck } from "@/lib/game/decks";
+import { boardImage, defaultBoardFor } from "@/lib/game/boards";
 import type { ActionResult, FactionId, GameAction, GameEvent, GameState } from "@/lib/game/types";
 import { applyMatchResult, loadProfile, saveProfile } from "@/lib/profile";
 import { applyEventToView, fetchMatch, postMatchAction, type MatchView } from "@/lib/online";
@@ -19,12 +20,6 @@ import TutorialOverlay from "./TutorialOverlay";
 import { play as playSfx, preload as preloadSfx, startMusic } from "@/lib/sound";
 import "./play.css";
 
-const BOARD_BY_ENEMY: Record<string, string> = {
-  pyre: "/board/cinderreach.jpg",
-  abyss: "/board/sunken-antiphon.jpg",
-  verdant: "/board/glasswake.jpg",
-  neutral: "/board/glasswake.jpg",
-};
 const HERO_ART: Record<string, string> = {
   pyre: "/cards/art/pyre.jpg", abyss: "/cards/art/abyss.jpg",
   verdant: "/cards/art/verdant.jpg", neutral: "/cards/art/verdant.jpg",
@@ -56,6 +51,7 @@ export default function PlayClient() {
   const playerFaction = (["pyre", "abyss", "verdant"].includes(params.get("deck") ?? "")
     ? params.get("deck") : "pyre") as FactionId;
   const tutorial = !online && params.get("tutorial") === "1";
+  const boardParam = params.get("board");
 
   const offlineEnemy = useMemo<FactionId>(() => {
     const others = (["pyre", "abyss", "verdant"] as FactionId[]).filter((f) => f !== playerFaction);
@@ -613,7 +609,7 @@ export default function PlayClient() {
   /* eslint-disable @next/next/no-img-element */
   return (
     <main className="playMain" ref={boardRef}
-      style={{ backgroundImage: `url(${BOARD_BY_ENEMY[enemyFaction]})` }}>
+      style={{ backgroundImage: `url(${boardImage(boardParam ?? defaultBoardFor(enemyFaction))})` }}>
       <div className="boardVeil" />
 
       {/* enemy top bar + corner avatar */}
