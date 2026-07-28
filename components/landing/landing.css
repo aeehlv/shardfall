@@ -141,8 +141,12 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding-bottom: 8vh;
+  /* logo group sits at the top; the pitch and CTAs centre below it */
+  justify-content: flex-start;
+  height: 100%;
+  padding: clamp(18px, 4vh, 54px) 0 6vh;
 }
+.ld-hero-mark { display: contents; }
 /* staggered fade-up entrance */
 .ld-hero-inner > * {
   animation: ld-rise 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) both;
@@ -159,18 +163,22 @@
 
 .ld-hero-logo {
   display: block;
-  width: min(660px, 88vw);
-  margin: 0 auto -8px;
+  width: min(360px, 62vw);
+  max-height: 20vh;
+  object-fit: contain;
+  margin: 0 auto -4px;
   filter: drop-shadow(0 10px 34px rgba(0, 0, 0, .8)) drop-shadow(0 0 40px rgba(227, 164, 74, .22));
 }
 .ld-hero-season {
   display: block;
-  width: min(430px, 74vw);
-  margin: 10px auto 0;
+  width: min(250px, 46vw);
+  max-height: 9vh;
+  object-fit: contain;
+  margin: 8px auto 0;
   filter: drop-shadow(0 6px 22px rgba(0, 0, 0, .75)) drop-shadow(0 0 26px rgba(227, 164, 74, .3));
 }
 .ld-hero-hook {
-  margin: 26px 0 0;
+  margin: auto 0 0;
   font-family: var(--font-display), Georgia, serif;
   font-weight: 600;
   font-size: clamp(1.05rem, 2.4vw, 1.4rem);
@@ -551,3 +559,7 @@
     transform: none;
   }
 }
+
+/* push the CTA block into the vertical centre of what's left, with the
+   scroll cue sitting just under it */
+.ld-hero-ctas { margin-bottom: auto; }
