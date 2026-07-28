@@ -20,7 +20,7 @@ const cinzel = Cinzel({
 });
 
 export const metadata: Metadata = {
-  title: "Shardfall — Card Gallery",
+  title: "Shardfall",
   description:
     "The first legendaries of Kelvarrow: one leader per faction, rendered as full cards with frames, stats, and card back.",
 };

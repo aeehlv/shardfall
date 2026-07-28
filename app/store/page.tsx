@@ -48,6 +48,7 @@ const TOPUPS = [
   { shards: 10, price: "1.99 €" },
   { shards: 30, price: "4.99 €" },
   { shards: 70, price: "9.99 €" },
+  { shards: 900, price: "99.00 €", best: true, label: "Hoard of the Undersun" },
 ];
 
 type Opening = { packName: string; cards: GameCard[] };
@@ -409,9 +410,11 @@ export default function StorePage() {
             <h2>Aethershards</h2>
             <div className="topupRow">
               {TOPUPS.map((t) => (
-                <div className="topupCard" key={t.shards}>
+                <div className={`topupCard${"best" in t && t.best ? " topupBest" : ""}`} key={t.shards}>
+                  {"best" in t && t.best && <span className="topupFlag">Best value</span>}
                   <img className="topupIcon" src="/ui/shard.png" alt="" />
                   <b className="topupAmount">+{t.shards} Shards</b>
+                  {"label" in t && t.label && <span className="topupLabel">{t.label}</span>}
                   <span className="topupPrice">{t.price}</span>
                   <button
                     className="buyBtn"

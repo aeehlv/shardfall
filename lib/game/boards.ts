@@ -24,9 +24,7 @@ export const BOARDS: BoardDef[] = [
 ];
 
 /** Arenas whose art actually exists yet — keep in step with public/board/. */
-export const AVAILABLE_BOARDS = new Set([
-  "glasswake", "cinderreach", "sunken-antiphon",
-]);
+export const AVAILABLE_BOARDS = new Set(BOARDS.map((b) => b.slug));
 
 export const playableBoards = (): BoardDef[] =>
   BOARDS.filter((b) => AVAILABLE_BOARDS.has(b.slug));

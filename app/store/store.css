@@ -321,3 +321,27 @@ body .doneBtn:disabled { filter: grayscale(.65) brightness(.7); }
   text-shadow: 0 0 16px rgba(227,164,74,.3);
 }
 .teaserDesc { color: var(--muted); font-size: .78rem; line-height: 1.45; }
+
+/* flagship shard tier */
+.topupCard.topupBest {
+  position: relative;
+  border-color: color-mix(in srgb, var(--gold) 60%, var(--line)) !important;
+  box-shadow: 0 0 0 1px rgba(227,164,74,.35), 0 12px 30px rgba(0,0,0,.55), 0 0 34px rgba(227,164,74,.22);
+}
+.topupCard.topupBest .topupIcon {
+  width: 58px; height: 58px;
+  filter: drop-shadow(0 0 14px rgba(227,164,74,.75));
+}
+.topupCard.topupBest .topupAmount { color: #ffd98a; font-size: 1.12rem; }
+.topupFlag {
+  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(180deg, #ffd98a, #a86f1f); color: #241505;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .64rem; letter-spacing: .14em; text-transform: uppercase;
+  padding: 3px 12px; border-radius: 999px; white-space: nowrap;
+  box-shadow: 0 3px 10px rgba(0,0,0,.6);
+}
+.topupLabel {
+  font-family: var(--font-display), Georgia, serif; font-size: .78rem;
+  color: var(--gold); letter-spacing: .04em;
+}
