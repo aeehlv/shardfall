@@ -134,6 +134,25 @@ function MenuInner() {
     return () => clearInterval(iv);
   }, []);
 
+  /** Demo wallet top-up: server-side when signed in, local profile otherwise. */
+  const grant = async (kind: "gold" | "shards") => {
+    if (session?.user) {
+      const r = await fetch("/api/dev/grant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind }),
+      });
+      if (r.ok) {
+        const me = await (await fetch("/api/me", { cache: "no-store" })).json();
+        if (me.player) setServerPlayer(me.player);
+      }
+      return;
+    }
+    const lp = loadProfile();
+    if (kind === "gold") lp.gold += 500; else lp.shards += 50;
+    saveProfile(lp);
+    setProfile({ ...lp });
+  };
+
   const confirmDeal = (slot: number) => {
     const deal = getHotDeals(Date.now()).find((d) => d.slot === slot);
     if (!deal) return;
@@ -341,18 +360,14 @@ function MenuInner() {
       <div className="moreCorner">
         {moreOpen && (
           <div className="morePop">
-            <Link className="moreLink" href="/gallery">Gallery</Link>
-            <Link className="moreLink" href="/studio">Card Studio</Link>
             <Link className="moreLink" href="/play?deck=pyre&tutorial=1">Replay tutorial</Link>
             <div className="moreDivider" aria-hidden="true" />
-            <span className="moreDevLabel">Dev tools</span>
-            <button className="moreLink dev" data-testid="admin-gold"
-              onClick={() => { const p = loadProfile(); p.gold += 500; saveProfile(p); setProfile({ ...p }); }}>
-              +500 gold (local)
+            <span className="moreDevLabel">Demo top-up</span>
+            <button className="moreLink dev" data-testid="admin-gold" onClick={() => void grant("gold")}>
+              +500 gold
             </button>
-            <button className="moreLink dev" data-testid="admin-shards"
-              onClick={() => { const p = loadProfile(); p.shards += 50; saveProfile(p); setProfile({ ...p }); }}>
-              +50 shards (local)
+            <button className="moreLink dev" data-testid="admin-shards" onClick={() => void grant("shards")}>
+              +50 shards
             </button>
           </div>
         )}

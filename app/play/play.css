@@ -400,8 +400,9 @@
   filter: drop-shadow(0 18px 30px rgba(0,0,0,.6));
 }
 .boardRow.mine.dropHint {
-  outline: 2px dashed rgba(227,164,74,.6); outline-offset: -6px; border-radius: 16px;
-  background: rgba(227,164,74,.07);
+  border-radius: 18px;
+  background: radial-gradient(ellipse at center, rgba(227,164,74,.16) 0%, rgba(227,164,74,.05) 60%, transparent 85%);
+  box-shadow: inset 0 0 40px rgba(227,164,74,.12);
 }
 .dropBurst {
   position: fixed; z-index: 69; width: 24px; height: 24px; pointer-events: none;
