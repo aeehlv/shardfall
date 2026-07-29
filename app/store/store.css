@@ -141,8 +141,14 @@
 .topupPrice {
   font-family: var(--font-display), Georgia, serif; font-weight: 700; color: var(--gold);
   font-size: 1.15rem;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
 }
-.topupCard .buyBtn { width: 100%; }
+.topupPrice s { opacity: .55; }
+.topupFuture {
+  font-family: inherit; font-style: italic; font-weight: 400; font-size: .66rem;
+  color: var(--muted); letter-spacing: .05em; text-transform: uppercase;
+}
+.topupCard .buyBtn { width: 100%; margin-top: auto; }
 .topupNote { margin: 14px 0 0; text-align: center; color: var(--muted); font-size: .82rem; font-style: italic; }
 
 /* ---- pack opening overlay ---- */

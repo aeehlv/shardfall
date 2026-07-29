@@ -20,6 +20,21 @@ export interface MatchView {
   error?: string;
 }
 
+/** Thrown when the match API is unreachable or answers with something that is not match JSON. */
+export class ConnectionError extends Error {
+  constructor() { super("connection"); this.name = "ConnectionError"; }
+}
+
+async function readMatchJson(r: Response): Promise<MatchView> {
+  if (r.status >= 500) throw new ConnectionError();
+  if (!(r.headers.get("content-type") ?? "").includes("application/json")) throw new ConnectionError();
+  try {
+    return await r.json();
+  } catch {
+    throw new ConnectionError();
+  }
+}
+
 const flip = (p: 0 | 1): 0 | 1 => (p === 0 ? 1 : 0);
 
 /** Remap a view so the local player is always index 0. */
@@ -45,8 +60,13 @@ export function toLocalPerspective(view: MatchView): MatchView {
 }
 
 export async function fetchMatch(id: string, since: number): Promise<MatchView> {
-  const r = await fetch(`/api/match/${id}?since=${since}`, { cache: "no-store" });
-  const j = await r.json();
+  let r: Response;
+  try {
+    r = await fetch(`/api/match/${id}?since=${since}`, { cache: "no-store" });
+  } catch {
+    throw new ConnectionError();
+  }
+  const j = await readMatchJson(r);
   if (!r.ok) return j;
   return toLocalPerspective(j);
 }
@@ -54,12 +74,17 @@ export async function fetchMatch(id: string, since: number): Promise<MatchView> 
 export async function postMatchAction(
   id: string, body: { action?: unknown; resign?: boolean; since: number },
 ): Promise<MatchView> {
-  const r = await fetch(`/api/match/${id}/action`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const j = await r.json();
+  let r: Response;
+  try {
+    r = await fetch(`/api/match/${id}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ConnectionError();
+  }
+  const j = await readMatchJson(r);
   if (!r.ok) return j;
   return toLocalPerspective(j);
 }

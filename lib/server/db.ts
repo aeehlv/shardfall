@@ -34,6 +34,30 @@ export interface PlayerDoc {
   /** {deckName: [cardIds]} */
   decks: Record<string, string[]>;
   createdAt: number;
+  /** ms timestamp of the last free daily-card claim */
+  lastFreeClaim?: number;
+  /** the one-shot guest-profile import has run */
+  imported?: boolean;
+  /** per-UTC-day counters (yyyymmdd day ints), claimed atomically before crediting */
+  topupDay?: number;
+  topupCount?: number;
+  grantDay?: number;
+  grantGoldCount?: number;
+  grantShardCount?: number;
+  practiceDay?: number;
+  practiceCount?: number;
+}
+
+/** Economy ledger row — append-only, one per wallet/collection mutation. */
+export interface TransactionDoc {
+  playerId: string;
+  ts: number;
+  kind: string;
+  currency: "gold" | "shards" | null;
+  amount: number;
+  itemId?: string;
+  balanceAfter?: number;
+  meta?: Record<string, unknown>;
 }
 
 /** Per-player finish rewards, keyed by seat index ("0" / "1"). Shape lives in match.ts. */
@@ -53,6 +77,8 @@ export interface MatchDoc {
   turnDeadline: number;
   campaignNode: string | null;
   rewards: MatchRewardsDoc | null;
+  /** finish-settlement once-flag, claimed atomically before payouts */
+  rewardsSettled?: boolean;
   /** Running tallies maintained by the match layer (the engine stays rules-pure). */
   p0Spells: number;
   p0UnitsLost: number;
@@ -73,6 +99,8 @@ export interface QueueDoc {
   since: number;
   matchId: string | null;
   faction: string;
+  /** ms timestamp of the last heartbeat poll — stale tickets are unpairable */
+  beat?: number;
 }
 
 export interface FriendDoc {
@@ -227,6 +255,9 @@ async function buildSchema(): Promise<void> {
     db.collection<CampaignChapterRewardDoc>("campaign_chapter_rewards").createIndexes([
       { key: { playerId: 1, chapter: 1 }, name: "player_chapter_unique", unique: true },
     ]),
+    db.collection<TransactionDoc>("transactions").createIndexes([
+      { key: { playerId: 1, ts: -1 }, name: "player_ts" },
+    ]),
   ]);
 
   // Sequential player ids: never hand out an id at or below the highest one in use,
@@ -289,6 +320,9 @@ export async function campaignChapterRewardsCol(): Promise<Collection<CampaignCh
 }
 export async function countersCol(): Promise<Collection<CounterDoc>> {
   return (await getDb()).collection<CounterDoc>("counters");
+}
+export async function transactionsCol(): Promise<Collection<TransactionDoc>> {
+  return (await getDb()).collection<TransactionDoc>("transactions");
 }
 
 // ------------------------------------------------------------------ counters --

@@ -11,9 +11,14 @@ import {
   PACKS, addCards, loadProfile, rollPack, saveProfile, type Profile,
 } from "@/lib/profile";
 import {
-  getDaily, getUpcoming, getWeekly, type PricedCard,
+  DAY_MS, getDaily, getUpcoming, getWeekly, type PricedCard,
 } from "@/lib/game/rotation";
+import {
+  FEATURED_IDS, MAX_COPIES, ROTATION_MAX, TOPUP_TIERS, singlePrice,
+} from "@/lib/game/store-pricing";
+import { CurrencyHint, usePlayer } from "@/lib/player-context";
 import FramedCard from "@/components/play/FramedCard";
+import SiteFooter from "@/components/SiteFooter";
 import "@/app/menu.css";
 import "@/app/play/play.css";
 import "./store.css";
@@ -23,18 +28,9 @@ const RARITY_GLOW: Record<Rarity, string> = {
   mythic: "#ff5c8a",
 };
 
-/** Fixed featured singles — epic/legendary ids that exist in the pool. */
-const FEATURED_IDS = ["pyre-003", "abyss-003", "verdant-003"];
 const FEATURED: GameCard[] = FEATURED_IDS
   .map((id) => CARD_POOL.find((c) => c.id === id))
   .filter((c): c is GameCard => Boolean(c));
-
-const singlePrice = (c: GameCard) => (c.rarity === "legendary" ? 15 : 8);
-const maxCopies = (c: GameCard) => (c.rarity === "legendary" ? 1 : 3);
-
-/** Rotation purchase limits: legendary/mythic 1 copy, everything else 3. */
-const rotationMax = (c: GameCard) =>
-  c.rarity === "legendary" || c.rarity === "mythic" ? 1 : 3;
 
 const fmtCountdown = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -44,20 +40,16 @@ const fmtCountdown = (ms: number) => {
   return d > 0 ? `${d}d ${rest}` : rest;
 };
 
-const TOPUPS = [
-  { shards: 10, price: "1.99 €" },
-  { shards: 30, price: "4.99 €" },
-  { shards: 70, price: "9.99 €" },
-  { shards: 900, price: "99.00 €", best: true, label: "Hoard of the Undersun" },
-];
-
 type Opening = { packName: string; cards: GameCard[] };
 
 export default function StorePage() {
+  const { signedIn, sessionLoading, player, refresh, error } = usePlayer();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [opening, setOpening] = useState<Opening | null>(null);
   const [flipped, setFlipped] = useState<boolean[]>([]);
   const [denied, setDenied] = useState<{ key: string; msg: string } | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+  const [freeClaimedDay, setFreeClaimedDay] = useState<string | null>(null);
   const denyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // SSR-safe rotation clock: null until mounted, then ticks every second.
@@ -93,13 +85,62 @@ export default function StorePage() {
 
   const clone = (p: Profile): Profile => ({ ...p, collection: { ...p.collection } });
 
+  // Signed-in players read/spend the server wallet; guests keep the local profile.
+  // While the session resolves the wallet is unknown — never flash guest numbers.
+  const ready = !sessionLoading && (signedIn ? player !== null : profile !== null);
+  const wallet = sessionLoading
+    ? null
+    : signedIn
+      ? player && { gold: player.gold, shards: player.shards }
+      : profile && { gold: profile.gold, shards: profile.shards };
+  const collection = (signedIn ? player?.collection : profile?.collection) ?? {};
+  const owned = (id: string) => collection[id] ?? 0;
+  const freeClaimed = signedIn
+    ? (player?.lastFreeClaim != null
+        ? daily !== null && player.lastFreeClaim >= daily.endsAt - DAY_MS
+        : freeClaimedDay === todayKey)
+    : profile?.lastFreeClaim === todayKey;
+
   const deny = (key: string, msg: string) => {
     if (denyTimer.current) clearTimeout(denyTimer.current);
     setDenied({ key, msg });
     denyTimer.current = setTimeout(() => setDenied(null), 900);
   };
 
-  const buyPack = (pack: (typeof PACKS)[number]) => {
+  /** One purchase at a time — a second click while one is in flight is a no-op. */
+  const withPending = async (key: string, fn: () => Promise<void>) => {
+    if (pending) return;
+    setPending(key);
+    try { await fn(); } finally { setPending(null); }
+  };
+
+  const revealPack = (packName: string, ids: string[]) => {
+    const byId = new Map(CARD_POOL.map((c) => [c.id, c]));
+    const cards = ids
+      .map((id) => byId.get(id))
+      .filter((c): c is GameCard => Boolean(c));
+    setFlipped(cards.map(() => false));
+    setOpening({ packName, cards });
+  };
+
+  /** Server purchase — denies with the API's message on 400/409, refreshes on success. */
+  const serverBuy = async (key: string, body: Record<string, unknown>) => {
+    const r = await fetch("/api/store/buy", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = (await r.json().catch(() => ({}))) as { error?: string; cards?: string[] };
+    if (!r.ok) { deny(key, j.error ?? "Purchase failed"); return null; }
+    await refresh();
+    return j;
+  };
+
+  const buyPack = (pack: (typeof PACKS)[number]) => withPending(`pack-${pack.id}`, async () => {
+    if (signedIn) {
+      const j = await serverBuy(`pack-${pack.id}`, { kind: "pack", size: pack.id });
+      if (j) revealPack(pack.name, j.cards ?? []);
+      return;
+    }
     if (!profile) return;
     if (profile.gold < pack.gold) { deny(`pack-${pack.id}`, "Not enough gold"); return; }
     const p = clone(profile);
@@ -108,32 +149,35 @@ export default function StorePage() {
     addCards(p, ids);
     saveProfile(p);
     setProfile(p);
-    const byId = new Map(CARD_POOL.map((c) => [c.id, c]));
-    const cards = ids
-      .map((id) => byId.get(id))
-      .filter((c): c is GameCard => Boolean(c));
-    setFlipped(cards.map(() => false));
-    setOpening({ packName: pack.name, cards });
-  };
+    revealPack(pack.name, ids);
+  });
 
-  const buySingle = (card: GameCard) => {
+  const buySingle = (card: GameCard) => withPending(`single-${card.id}`, async () => {
+    if (owned(card.id) >= MAX_COPIES(card.rarity)) return;
+    if (signedIn) {
+      await serverBuy(`single-${card.id}`, { kind: "single", id: card.id });
+      return;
+    }
     if (!profile) return;
-    if ((profile.collection[card.id] ?? 0) >= maxCopies(card)) return;
-    const price = singlePrice(card);
+    const price = singlePrice(card.rarity);
     if (profile.shards < price) { deny(`single-${card.id}`, "Not enough shards"); return; }
     const p = clone(profile);
     p.shards -= price;
     addCards(p, [card.id]);
     saveProfile(p);
     setProfile(p);
-  };
+  });
 
   /** Buy a rotation card (daily deal / weekly featured) with its listed currency. */
-  const buyRotation = (pc: PricedCard, keyPrefix: string) => {
-    if (!profile) return;
+  const buyRotation = (pc: PricedCard, keyPrefix: string) => withPending(`${keyPrefix}-${pc.card.id}`, async () => {
     const card = pc.card;
-    if ((profile.collection[card.id] ?? 0) >= rotationMax(card)) return;
+    if (owned(card.id) >= ROTATION_MAX(card.rarity)) return;
     const key = `${keyPrefix}-${card.id}`;
+    if (signedIn) {
+      await serverBuy(key, { kind: "rotation", id: card.id });
+      return;
+    }
+    if (!profile) return;
     if (pc.currency === "gold" && profile.gold < pc.price) { deny(key, "Not enough gold"); return; }
     if (pc.currency === "shards" && profile.shards < pc.price) { deny(key, "Not enough shards"); return; }
     const p = clone(profile);
@@ -141,26 +185,54 @@ export default function StorePage() {
     addCards(p, [card.id]);
     saveProfile(p);
     setProfile(p);
-  };
+  });
 
-  /** Claim the free daily common — once per UTC day, tracked on the profile. */
-  const claimFree = () => {
-    if (!profile || !daily || !todayKey) return;
-    if (profile.lastFreeClaim === todayKey) return;
+  /** Claim the free daily common — once per UTC day, server-tracked when signed in. */
+  const claimFree = () => withPending("free-daily", async () => {
+    if (!daily || !todayKey || freeClaimed) return;
+    if (signedIn) {
+      const r = await fetch("/api/store/buy", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "daily-free" }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        if (r.status === 409) setFreeClaimedDay(todayKey);
+        deny("free-daily", j.error ?? "Claim failed");
+        return;
+      }
+      setFreeClaimedDay(todayKey);
+      await refresh();
+      return;
+    }
+    if (!profile) return;
     const p = clone(profile);
     addCards(p, [daily.freeCard.id]);
     p.lastFreeClaim = todayKey;
     saveProfile(p);
     setProfile(p);
-  };
+  });
 
-  const topUp = (shards: number) => {
+  const topUp = (shards: number) => withPending(`topup-${shards}`, async () => {
+    if (signedIn) {
+      const r = await fetch("/api/store/topup", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: String(shards) }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => ({}))) as { error?: string };
+        deny(`topup-${shards}`, j.error ?? "Top-up failed");
+        return;
+      }
+      await refresh();
+      return;
+    }
     if (!profile) return;
     const p = clone(profile);
     p.shards += shards;
     saveProfile(p);
     setProfile(p);
-  };
+  });
 
   const flipOne = (i: number) =>
     setFlipped((f) => f.map((v, j) => (j === i ? true : v)));
@@ -176,14 +248,25 @@ export default function StorePage() {
         <p>Packs, relics, and Aethershards of Kelvarrow</p>
       </header>
 
-      {profile && (
+      {(signedIn || profile) && (
         <div className="walletBar storeWallet" data-testid="wallet">
-          <span data-testid="wallet-gold"><img src="/ui/gold.png" alt="gold" />{profile.gold}</span>
-          <span data-testid="wallet-shards"><img src="/ui/shard.png" alt="shards" />{profile.shards}</span>
+          <CurrencyHint kind="gold">
+            <span data-testid="wallet-gold"><img src="/ui/gold.png" alt="gold" />{wallet ? wallet.gold : "···"}</span>
+          </CurrencyHint>
+          <CurrencyHint kind="shards">
+            <span data-testid="wallet-shards"><img src="/ui/shard.png" alt="shards" />{wallet ? wallet.shards : "···"}</span>
+          </CurrencyHint>
         </div>
       )}
 
-      {profile && (
+      {!sessionLoading && signedIn && !player && error && (
+        <section className="storeSection" data-testid="account-error" style={{ textAlign: "center" }}>
+          <p style={{ marginBottom: 12 }}>Account data unavailable — {error}</p>
+          <button className="buyBtn" onClick={() => void refresh()}>Retry</button>
+        </section>
+      )}
+
+      {ready && (
         <>
           {/* ---- daily deals ---- */}
           {daily && now !== null && (
@@ -197,9 +280,9 @@ export default function StorePage() {
               <div className="singleRow">
                 {daily.deals.map((pc) => {
                   const card = pc.card;
-                  const owned = profile.collection[card.id] ?? 0;
-                  const max = rotationMax(card);
-                  const soldOut = owned >= max;
+                  const copies = owned(card.id);
+                  const max = ROTATION_MAX(card.rarity);
+                  const soldOut = copies >= max;
                   const key = `deal-${card.id}`;
                   const isDenied = denied?.key === key;
                   return (
@@ -211,7 +294,7 @@ export default function StorePage() {
                       <span className="discountTag">-{pc.discountPct}%</span>
                       <FramedCard card={card} />
                       <span className="singleRarity">{card.rarity}</span>
-                      <span className="ownedTag">Owned {owned}/{max}</span>
+                      <span className="ownedTag">Owned {copies}/{max}</span>
                       <div className="priceRow">
                         <img src="/ui/gold.png" alt="gold" />
                         <s className="wasPrice">{pc.basePrice}</s>
@@ -220,8 +303,8 @@ export default function StorePage() {
                       <button
                         className={`buyBtn${isDenied ? " shake" : ""}`}
                         data-testid={`deal-${card.id}`}
-                        disabled={soldOut}
-                        onClick={() => buyRotation(pc, "deal")}
+                        disabled={soldOut || pending === key}
+                        onClick={() => void buyRotation(pc, "deal")}
                       >
                         {soldOut ? "Owned" : "Buy"}
                       </button>
@@ -238,17 +321,18 @@ export default function StorePage() {
                   <FramedCard card={daily.freeCard} />
                   <span className="singleRarity">daily gift</span>
                   <span className="ownedTag">
-                    Owned {profile.collection[daily.freeCard.id] ?? 0}
+                    Owned {owned(daily.freeCard.id)}
                   </span>
                   <div className="priceRow freeRow"><span>On the house</span></div>
                   <button
-                    className="buyBtn"
+                    className={`buyBtn${denied?.key === "free-daily" ? " shake" : ""}`}
                     data-testid="claim-free"
-                    disabled={profile.lastFreeClaim === todayKey}
-                    onClick={claimFree}
+                    disabled={freeClaimed || pending === "free-daily"}
+                    onClick={() => void claimFree()}
                   >
-                    {profile.lastFreeClaim === todayKey ? "Claimed today" : "Claim"}
+                    {freeClaimed ? "Claimed today" : "Claim"}
                   </button>
+                  {denied?.key === "free-daily" && <div className="denyMsg">{denied.msg}</div>}
                 </div>
               </div>
             </section>
@@ -273,9 +357,9 @@ export default function StorePage() {
               <div className="singleRow">
                 {weekly.featured.map((pc) => {
                   const card = pc.card;
-                  const owned = profile.collection[card.id] ?? 0;
-                  const max = rotationMax(card);
-                  const soldOut = owned >= max;
+                  const copies = owned(card.id);
+                  const max = ROTATION_MAX(card.rarity);
+                  const soldOut = copies >= max;
                   const key = `weekly-${card.id}`;
                   const isDenied = denied?.key === key;
                   const isGold = pc.currency === "gold";
@@ -290,7 +374,7 @@ export default function StorePage() {
                       )}
                       <FramedCard card={card} />
                       <span className="singleRarity">{card.rarity}</span>
-                      <span className="ownedTag">Owned {owned}/{max}</span>
+                      <span className="ownedTag">Owned {copies}/{max}</span>
                       <div className="priceRow">
                         <img
                           src={isGold ? "/ui/gold.png" : "/ui/shard.png"}
@@ -304,8 +388,8 @@ export default function StorePage() {
                       <button
                         className={`buyBtn${isDenied ? " shake" : ""}`}
                         data-testid={`weekly-${card.id}`}
-                        disabled={soldOut}
-                        onClick={() => buyRotation(pc, "weekly")}
+                        disabled={soldOut || pending === key}
+                        onClick={() => void buyRotation(pc, "weekly")}
                       >
                         {soldOut ? "Owned" : "Buy"}
                       </button>
@@ -355,7 +439,8 @@ export default function StorePage() {
                       <button
                         className={`buyBtn${isDenied ? " shake" : ""}`}
                         data-testid={`buy-${pack.id}`}
-                        onClick={() => buyPack(pack)}
+                        disabled={pending === key}
+                        onClick={() => void buyPack(pack)}
                       >
                         Buy Pack
                       </button>
@@ -372,9 +457,9 @@ export default function StorePage() {
             <h2>Featured Singles</h2>
             <div className="singleRow">
               {FEATURED.map((card) => {
-                const owned = profile.collection[card.id] ?? 0;
-                const max = maxCopies(card);
-                const soldOut = owned >= max;
+                const copies = owned(card.id);
+                const max = MAX_COPIES(card.rarity);
+                const soldOut = copies >= max;
                 const key = `single-${card.id}`;
                 const isDenied = denied?.key === key;
                 return (
@@ -385,16 +470,16 @@ export default function StorePage() {
                   >
                     <FramedCard card={card} />
                     <span className="singleRarity">{card.rarity}</span>
-                    <span className="ownedTag">Owned {owned}/{max}</span>
+                    <span className="ownedTag">Owned {copies}/{max}</span>
                     <div className="priceRow">
                       <img src="/ui/shard.png" alt="shards" />
-                      <span>{singlePrice(card)}</span>
+                      <span>{singlePrice(card.rarity)}</span>
                     </div>
                     <button
                       className={`buyBtn${isDenied ? " shake" : ""}`}
                       data-testid={`buy-single-${card.id}`}
-                      disabled={soldOut}
-                      onClick={() => buySingle(card)}
+                      disabled={soldOut || pending === key}
+                      onClick={() => void buySingle(card)}
                     >
                       {soldOut ? "Owned" : "Buy"}
                     </button>
@@ -409,22 +494,27 @@ export default function StorePage() {
           <section className="storeSection">
             <h2>Aethershards</h2>
             <div className="topupRow">
-              {TOPUPS.map((t) => (
-                <div className={`topupCard${"best" in t && t.best ? " topupBest" : ""}`} key={t.shards}>
-                  {"best" in t && t.best && <span className="topupFlag">Best value</span>}
-                  <img className="topupIcon" src="/ui/shard.png" alt="" />
-                  <b className="topupAmount">+{t.shards} Shards</b>
-                  {"label" in t && t.label && <span className="topupLabel">{t.label}</span>}
-                  <span className="topupPrice">{t.price}</span>
-                  <button
-                    className="buyBtn"
-                    data-testid={`topup-${t.shards}`}
-                    onClick={() => topUp(t.shards)}
-                  >
-                    Purchase
-                  </button>
-                </div>
-              ))}
+              {TOPUP_TIERS.map((t) => {
+                const isDenied = denied?.key === `topup-${t.shards}`;
+                return (
+                  <div className={`topupCard${"best" in t && t.best ? " topupBest" : ""}`} key={t.shards}>
+                    {"best" in t && t.best && <span className="topupFlag">Best value</span>}
+                    <img className="topupIcon" src="/ui/shard.png" alt="" />
+                    <b className="topupAmount">+{t.shards} Shards</b>
+                    {"label" in t && t.label && <span className="topupLabel">{t.label}</span>}
+                    <span className="topupPrice"><s>{t.price}</s><i className="topupFuture">future price</i></span>
+                    <button
+                      className={`buyBtn${isDenied ? " shake" : ""}`}
+                      data-testid={`topup-${t.shards}`}
+                      disabled={pending === `topup-${t.shards}`}
+                      onClick={() => void topUp(t.shards)}
+                    >
+                      Claim (demo)
+                    </button>
+                    {isDenied && <div className="denyMsg">{denied.msg}</div>}
+                  </div>
+                );
+              })}
             </div>
             <p className="topupNote">Payments arrive with the online release — for now these grant shards instantly.</p>
           </section>
@@ -460,6 +550,8 @@ export default function StorePage() {
           </button>
         </div>
       )}
+
+      <SiteFooter />
     </main>
   );
   /* eslint-enable @next/next/no-img-element */

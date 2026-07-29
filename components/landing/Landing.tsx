@@ -10,6 +10,7 @@
  */
 
 import Link from "next/link";
+import SiteFooter from "@/components/SiteFooter";
 import "./landing.css";
 
 type AccentStyle = React.CSSProperties & {
@@ -327,6 +328,7 @@ export default function Landing() {
         <p className="ld-footer-title">Shardfall — First Epoch: The Shattering</p>
         <p className="ld-footer-note">Work in progress — Kelvarrow v0.2</p>
       </footer>
+      <SiteFooter />
     </main>
   );
 }

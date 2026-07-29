@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cinzel, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SoundToggle from "@/components/SoundToggle";
+import { PlayerProvider } from "@/lib/player-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,7 +36,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${cinzel.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}<SoundToggle /></body>
+      <body className="min-h-full flex flex-col"><PlayerProvider>{children}</PlayerProvider><SoundToggle /></body>
     </html>
   );
 }

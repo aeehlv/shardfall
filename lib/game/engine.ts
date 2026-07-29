@@ -16,6 +16,15 @@ export function getCard(id: string): GameCard {
   if (!c) throw new Error(`Unknown card: ${id}`);
   return c;
 }
+const LOST_SHARD: GameCard = {
+  id: "lost-shard", name: "Lost Shard", faction: "neutral", type: "unit",
+  rarity: "common", cost: 0, attack: 0, health: 1,
+  text: "A shard whose memory has faded from Kelvarrow.", token: true,
+};
+/** Render-safe lookup: unknown ids yield a harmless placeholder instead of throwing. */
+export function getCardSafe(id: string): GameCard {
+  return REGISTRY[id] ?? LOST_SHARD;
+}
 export function allCards(): GameCard[] {
   return Object.values(REGISTRY);
 }

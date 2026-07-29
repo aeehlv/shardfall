@@ -16,10 +16,12 @@ writing framework-touching code. Heed deprecation notices.
 
 ## What this is
 
-Turn-based PvP/PvE collectible card game ("Shardfall", world of Kelvarrow). Currently implemented:
-the card gallery at `/` (three legendary cards with 3D tilt + click-to-flip) and the Card Studio
-at `/studio` (regenerate any card asset with `google/gemini-3.1-flash-image` by editing prompts;
-versioned iteration; saves auto-backup and auto-knockout frames).
+Turn-based PvP/PvE collectible card game ("Shardfall", world of Kelvarrow) at shardfall.app.
+Currently implemented: online play with accounts (better-auth + MongoDB), server-authoritative
+economy, matchmaking queue, campaign, store, collection/decks, leaderboard, friends — plus the
+Card Studio at `/studio` (regenerate any card asset with `google/gemini-3.1-flash-image` by
+editing prompts; versioned iteration; saves auto-backup and auto-knockout frames; prod-gated
+behind `STUDIO_ENABLED`).
 
 ## Content & asset pipeline (important)
 
@@ -49,16 +51,42 @@ versioned iteration; saves auto-backup and auto-knockout frames).
 - Shipped frame files: `library/art/ui/frame_pyre_v7.png`, `frame_abyss_v8.png`,
   `frame_verdant_v7.png` (older versions kept alongside for history).
 
-## Game (v0 — playable vs AI)
+## Game (online — accounts, PvP queue, campaign)
 
-- Design doc: `docs/GAME_PLAN.md` (rules, DSL, economy, testing strategy).
+- Design doc: `docs/GAME_PLAN.md` (rules, DSL, economy, testing strategy). Review-fix log:
+  `docs/REVIEW_FIXES.md`.
 - Engine: `lib/game/` — pure deterministic TS (types.ts = contract + effect DSL, engine.ts,
   ai.ts, decks.ts, cards-data.ts = the 50-card pool, pool.ts registers it). Never put React or
   IO in the engine. All card effects MUST use the DSL ops in types.ts.
-- Screens: `/` menu (+ ~10s intro overlay, first visit), `/play` match vs AI (`?deck=`,
-  `?tutorial=1`), `/store`, `/collection`, `/gallery` (showcase), `/studio` (asset editor).
-- Profile/economy: `lib/profile.ts`, localStorage only (no server/auth yet — PvP and payments
-  are future milestones). Starter decks granted on first menu load.
+- Auth: better-auth (`lib/auth.ts`, email+password, mongodbAdapter; client in
+  `lib/auth-client.ts`), login/signup at `/login`. `lib/server/session.ts` resolves the current
+  player from the session; `ensurePlayerForUser` (lib/server/players.ts) links the better-auth
+  user to a numeric-`_id` player doc.
+- Data layer: MongoDB via `lib/server/db.ts` — collections: players, matches, match_events,
+  queue, friends (+ friend_requests, battle_invites), campaign_progress
+  (+ campaign_chapter_rewards), and the `transactions` ledger (every wallet change logged with
+  kind/currency/amount/balanceAfter).
+- Economy is **server-authoritative** for signed-in users: single source of truth is the player
+  doc, mirrored to the client by `lib/player-context.tsx` (PlayerProvider mounted in layout.tsx;
+  `usePlayer()` + `WalletBar`). All wallet mutations go through atomic `creditWallet`/`debitWallet`
+  in `lib/server/players.ts`. Store purchases: POST `/api/store/buy` and `/api/store/topup`
+  (`lib/server/store.ts`); practice rewards: POST `/api/practice/finish` (daily-capped).
+  `lib/profile.ts` (localStorage) is the guest-only fallback; a one-time clamped import merges a
+  guest profile into the server account at login.
+- Online matches: `lib/server/match.ts` (match rows + event log, turn deadlines, resume, resign/
+  abandon, per-player state views); `/api/queue` pairs players atomically. One active match per
+  kind (ranked via the queue, one campaign run, one friendly).
+- Screens: `/` menu (+ ~10s intro overlay, first visit), `/play` match (`?deck=`, `?tutorial=1`),
+  `/campaign`, `/store`, `/collection`, `/friends`, `/leaderboard`, `/gallery` (showcase),
+  `/login`, `/account` (identity + progression + wallet + purchase history from
+  `/api/me/transactions`), `/admin` (ADMIN_EMAILS-gated stats/players/grants), `/studio` (asset
+  editor, prod-gated), legal pages `/privacy` `/terms` `/refunds` (components/SiteFooter.tsx on
+  the logged-out landing).
+- Env: `MONGODB_URI` (.env.local), `MONGODB_DB` (optional db-name override; defaults to the
+  URI path, else "shardfall"), `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`, `TRUSTED_ORIGINS`
+  (optional, comma-separated extra allowed origins), `DEMO_GRANTS` (enables `/api/dev/grant`,
+  5/kind/day), `ADMIN_EMAILS` (comma-separated admin allowlist), `STUDIO_ENABLED`,
+  `AI_GATEWAY_API_KEY`.
 - Card art for the game pool: `public/cards/art/game/<id>.jpg` (640w), generated from each
   card's `artPrompt` field (kept in cards-data.ts).
 - `lib/frames.ts` — frame registry (faction → frame PNG + layout, incl. the neutral stone frame);
@@ -68,8 +96,8 @@ versioned iteration; saves auto-backup and auto-knockout frames).
   2848×1600 (seedream-4.5, `size:"2K"`, `providerOptions.bytedance.watermark:false`); the menu
   uses its own key art (`public/ui/menu-bg.jpg`) + wordmark (`public/ui/wordmark.png`).
 - Tests: `npx tsx scripts/test-engine.ts` (engine unit tests) and `node scripts/e2e/0*.mjs`
-  (menu/match/store/tutorial against the dev server — check its port first). Both suites must
-  pass after gameplay changes.
+  (menu/match/store/tutorial/online/campaign against the dev server, usually port 3800 — check
+  the actual port first). Both suites must pass after gameplay changes.
 
 ## Conventions
 

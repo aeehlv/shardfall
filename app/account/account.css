@@ -1,0 +1,246 @@
+/* ---- Shardfall account (личный кабинет) ----------------------------------- */
+
+.accountMain {
+  position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  padding: clamp(24px, 5vh, 56px) 24px 20px;
+  background:
+    radial-gradient(90% 60% at 50% -10%, rgba(227,164,74,.07), transparent 70%),
+    var(--ground);
+}
+
+/* generated back button — same pattern as .storeBack */
+.accountBack {
+  position: fixed; top: 14px; left: 18px; z-index: 30;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .85rem;
+  letter-spacing: .06em; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.accountBack:hover { filter: brightness(1.14); }
+
+.accountCol { width: min(760px, 94vw); margin: 0 auto; flex: 1; }
+
+.accountHeader { text-align: center; margin-bottom: 8px; }
+.accountHeader h1 {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: clamp(1.7rem, 4.5vw, 2.4rem); letter-spacing: .2em; text-transform: uppercase;
+  color: #f3ead9; text-shadow: 0 4px 28px rgba(0,0,0,.8), 0 0 40px rgba(227,164,74,.35);
+}
+.accountHeader p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
+
+/* ---- sections (store-style rules) ---- */
+.accountSection { margin-top: clamp(24px, 4vh, 38px); }
+.accountSection h2 {
+  display: flex; align-items: center; gap: 14px; margin: 0 0 14px;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1rem;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--gold);
+}
+.accountSection h2::before {
+  content: ""; width: 26px; height: 1px;
+  background: linear-gradient(270deg, rgba(227,164,74,.7), transparent);
+}
+.accountSection h2::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(227,164,74,.55), transparent 80%);
+}
+
+.acctPanel {
+  border: 1px solid var(--line); border-radius: 14px;
+  background: linear-gradient(180deg, rgba(28,23,36,.92), rgba(19,16,23,.95));
+  box-shadow: 0 8px 22px rgba(0,0,0,.4);
+  padding: 16px 20px;
+}
+
+/* ---- identity rows ---- */
+.acctRow {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 9px 0;
+}
+.acctRow + .acctRow { border-top: 1px solid rgba(46,40,55,.7); }
+.acctRow > span:first-child {
+  width: 130px; flex: none;
+  font-family: var(--font-mono, monospace); font-size: .68rem; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--muted);
+}
+.acctRow b { font-family: var(--font-display), Georgia, serif; color: #eae3d6; font-size: .98rem; letter-spacing: .03em; }
+.acctRow .acctValue { color: #cfc7d6; font-size: .92rem; }
+
+.acctEdit {
+  margin-left: auto; background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-size: .82rem; letter-spacing: .04em;
+}
+.acctEdit:hover { color: var(--gold); }
+
+/* ---- forms (login-style fields) ---- */
+.acctForm { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.acctForm.inline { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 0 auto; }
+.acctFieldRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+
+.acctField { display: flex; flex-direction: column; gap: 5px; }
+.acctField span {
+  font-family: var(--font-display), Georgia, serif; font-size: .72rem; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.acctField input, .acctForm.inline input {
+  padding: 9px 12px; border-radius: 8px;
+  background: rgba(12,10,16,.8); border: 1px solid #2e2837; color: #eae3d6;
+  font-size: .92rem; outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.acctField input::placeholder { color: rgba(156,147,168,.55); }
+.acctField input:focus, .acctForm.inline input:focus {
+  border-color: rgba(227,164,74,.75);
+  outline: 1px solid rgba(227,164,74,.55); outline-offset: 1px;
+  box-shadow: 0 0 14px rgba(227,164,74,.16);
+}
+
+/* small gold / dark generated buttons */
+.acctGold {
+  cursor: pointer; text-decoration: none; text-align: center;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-gold.png") 90 255 fill stretch;
+  border-width: 14px 40px; padding: 3px 4px;
+  color: #241505; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .9rem; letter-spacing: .05em; text-shadow: 0 1px 0 rgba(255,235,180,.45);
+  box-shadow: 0 5px 14px rgba(0,0,0,.5);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.acctGold:hover:not(:disabled) { filter: brightness(1.12); }
+.acctGold:active:not(:disabled) { transform: translateY(1px); }
+.acctGold:disabled { filter: grayscale(.65) brightness(.7); cursor: default; }
+
+.acctDark {
+  cursor: pointer; text-decoration: none; text-align: center;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .85rem; letter-spacing: .05em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.acctDark:hover { filter: brightness(1.14); }
+
+.acctError {
+  margin: 0; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid rgba(224,86,47,.55);
+  background: linear-gradient(180deg, rgba(74,24,14,.7), rgba(46,14,9,.8));
+  color: #f0a189; font-size: .82rem; letter-spacing: .02em; text-align: center;
+}
+.acctOk { margin: 0; color: #8cc152; font-size: .84rem; font-style: italic; }
+
+.acctSignoutRow { display: flex; justify-content: flex-end; margin-top: 14px; }
+
+/* ---- progression / wallet stat tiles ---- */
+.acctStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.acctStat {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 14px 10px; border-radius: 12px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(28,23,36,.92), rgba(19,16,23,.95));
+  box-shadow: 0 6px 16px rgba(0,0,0,.35);
+}
+.acctStat > span {
+  font-family: var(--font-mono, monospace); font-size: .64rem; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--muted);
+}
+.acctStat > b {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: 1.15rem;
+  color: #f0e8d8; letter-spacing: .04em;
+}
+.acctStat img { width: 22px; height: 22px; object-fit: contain; }
+.acctStat img.acctIconWide { width: 32px; height: 22px; }
+.acctStat .leagueCrest { width: 26px; height: 26px; }
+.acctStat i { font-style: normal; color: var(--muted); font-size: .78rem; }
+
+/* ---- purchase history table ---- */
+.txnWrap { overflow-x: auto; }
+.txnTable { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.txnTable th {
+  padding: 8px 12px; text-align: left; white-space: nowrap;
+  font-family: var(--font-mono, monospace); font-weight: 400; font-size: .64rem;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.txnTable td {
+  padding: 9px 12px; color: #cfc7d6; white-space: nowrap;
+  border-bottom: 1px solid rgba(46,40,55,.55);
+}
+.txnTable tr:last-child td { border-bottom: 0; }
+.txnDate { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .8rem; }
+.txnKind { font-family: var(--font-display), Georgia, serif; color: #eae3d6; letter-spacing: .03em; }
+.txnItem { color: var(--muted); font-size: .82rem; }
+.txnAmount {
+  text-align: right; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.txnAmount img {
+  display: inline-block; width: 16px; height: 16px; object-fit: contain;
+  vertical-align: -3px; margin-left: 5px;
+}
+.txnThumbCell { width: 44px; padding-right: 2px; }
+.txnThumb { display: block; width: 38px; height: 38px; margin: 0 auto; object-fit: contain; }
+.txnThumb.card {
+  object-fit: cover; border-radius: 6px;
+  border: 1px solid rgba(227,164,74,.35); box-shadow: 0 2px 8px rgba(0,0,0,.55);
+}
+.txnThumb.coin { width: 26px; height: 26px; }
+.txnTable .txnPlus { color: #8cc152; }
+.txnTable .txnMinus { color: #e0562f; }
+.txnTable .txnZero { color: var(--muted); font-weight: 400; }
+.txnEmpty { margin: 6px 0; text-align: center; color: var(--muted); font-style: italic; font-size: .88rem; }
+
+/* ---- signed-out gate ---- */
+.acctGate {
+  margin: auto; width: min(440px, 94vw); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill;
+  border-width: 44px 50px; padding: 10px 8px 16px;
+  filter: drop-shadow(0 18px 44px rgba(0,0,0,.6));
+}
+.acctGate img { width: 74px; height: 74px; object-fit: contain; filter: drop-shadow(0 0 18px rgba(227,164,74,.35)); }
+.acctGate h1 {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: 1.5rem; letter-spacing: .18em; text-transform: uppercase; color: #f3ead9;
+  text-shadow: 0 0 30px rgba(227,164,74,.3);
+}
+.acctGate p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.5; }
+.acctGate .acctGold { margin-top: 6px; min-width: 220px; }
+
+.acctPending { margin: auto; color: var(--muted); font-style: italic; }
+
+/* ---- danger zone (account deletion) ---- */
+.acctDanger h2 { color: #cf6a55; }
+.acctDanger h2::before { background: linear-gradient(270deg, rgba(207,106,85,.7), transparent); }
+.acctDanger h2::after { background: linear-gradient(90deg, rgba(207,106,85,.55), transparent 80%); }
+.acctDangerPanel {
+  border-color: rgba(207,106,85,.4);
+  background: linear-gradient(180deg, rgba(41,22,22,.9), rgba(24,14,15,.95));
+}
+.acctDangerPanel .acctField input:focus {
+  border-color: rgba(224,86,47,.7);
+  outline-color: rgba(224,86,47,.5);
+  box-shadow: 0 0 14px rgba(224,86,47,.18);
+}
+.acctDangerRow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.acctDangerRow p { flex: 1 1 300px; margin: 0; color: #c9b4ae; font-size: .88rem; line-height: 1.5; }
+.acctDangerWarn { margin: 0; color: #e0937d; font-size: .88rem; line-height: 1.5; font-style: italic; }
+.acctDangerActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acctDangerBtn {
+  cursor: pointer; padding: 9px 18px; border-radius: 9px;
+  border: 1px solid rgba(224,86,47,.55);
+  background: linear-gradient(180deg, rgba(74,24,14,.75), rgba(46,14,9,.85));
+  color: #f0a189; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .85rem; letter-spacing: .06em;
+  transition: filter .15s ease, box-shadow .15s ease;
+}
+.acctDangerBtn:hover:not(:disabled) {
+  filter: brightness(1.18); box-shadow: 0 0 16px rgba(224,86,47,.25);
+}
+.acctDangerBtn:disabled { filter: grayscale(.5) brightness(.7); cursor: default; }
+.acctDangerBtn.confirm {
+  border-color: rgba(224,86,47,.8); color: #ffd9c9;
+  background: linear-gradient(180deg, rgba(122,34,18,.85), rgba(74,20,12,.9));
+}

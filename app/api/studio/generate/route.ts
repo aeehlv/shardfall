@@ -9,7 +9,11 @@ export const maxDuration = 300;
 const GATEWAY = "https://ai-gateway.vercel.sh/v1/chat/completions";
 const MODEL = "google/gemini-3.1-flash-image";
 
+const studioDisabled = () =>
+  process.env.NODE_ENV === "production" && process.env.STUDIO_ENABLED !== "1";
+
 export async function POST(req: Request) {
+  if (studioDisabled()) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { slotId, prompt, useBase, baseImage } = (await req.json()) as {
     slotId: string;
     prompt: string;

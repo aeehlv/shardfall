@@ -2,10 +2,12 @@
  *  Backed by MongoDB — every db-touching export is async. */
 
 import { randomUUID } from "crypto";
+import type { Filter } from "mongodb";
 import {
-  campaignChapterRewardsCol, campaignProgressCol, matchEventsCol, matchesCol, type MatchDoc,
+  campaignChapterRewardsCol, campaignProgressCol, matchEventsCol, matchesCol, playersCol,
+  type MatchDoc,
 } from "./db";
-import { addXpGold, applyElo, getPlayerById, grantPacks, updatePlayer } from "./players";
+import { addXpGold, applyElo, creditWallet, getPlayerById, grantPacks } from "./players";
 import { applyAction, newGame } from "@/lib/game/engine";
 import { aiTakeTurn } from "@/lib/game/ai";
 import { buildStarterDeck } from "@/lib/game/decks";
@@ -71,12 +73,16 @@ function toMatchRow(doc: MatchDoc): MatchRow {
   };
 }
 
-async function saveEvents(matchId: string, seq: number, events: GameEvent[]) {
-  await (await matchEventsCol()).updateOne(
-    { matchId, seq },
-    { $set: { events } },
-    { upsert: true },
-  );
+/** Insert-only: the unique {matchId, seq} index is the write lock for a step.
+ *  False = another writer already recorded this seq (concurrent advance). */
+async function saveEvents(matchId: string, seq: number, events: GameEvent[]): Promise<boolean> {
+  try {
+    await (await matchEventsCol()).insertOne({ matchId, seq, events });
+    return true;
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) return false;
+    throw err;
+  }
 }
 
 /** Per-step tally of the two things the star objectives need but the state does not carry. */
@@ -145,19 +151,21 @@ export async function campaignOverview(playerId: number) {
   };
 }
 
-/** Pay a NodeReward into a player's wallet / packs / collection. */
+/** Pay a NodeReward into a player's wallet / packs / collection — atomic $incs only. */
 async function applyReward(playerId: number, r: NodeReward) {
-  const p = await getPlayerById(playerId);
-  if (!p) return;
-  const fields: Partial<Record<string, unknown>> = {};
-  if (r.gold) fields.gold = p.gold + r.gold;
-  if (r.shards) fields.shards = p.shards + r.shards;
-  if (r.card) {
-    const collection = { ...p.collection };
-    collection[r.card] = (collection[r.card] ?? 0) + 1;
-    fields.collection = collection;
+  if (r.gold || r.shards) {
+    await creditWallet(
+      playerId,
+      { gold: r.gold || undefined, shards: r.shards || undefined },
+      { kind: "campaign_reward" },
+    );
   }
-  if (Object.keys(fields).length > 0) await updatePlayer(playerId, fields);
+  if (r.card) {
+    await (await playersCol()).updateOne(
+      { _id: playerId },
+      { $inc: { [`collection.${r.card}`]: 1 } },
+    );
+  }
   for (const pack of r.packs) await grantPacks(playerId, pack.size, pack.count);
 }
 
@@ -209,37 +217,60 @@ export async function getMatch(id: string): Promise<MatchRow | undefined> {
   return doc ? toMatchRow(doc) : undefined;
 }
 
-async function persist(m: MatchRow, state: GameState, eventsBatch: GameEvent[]) {
-  m.seq += 1;
-  m.state = state;
-  await saveEvents(m.id, m.seq, eventsBatch);
+/** CAS write of one step (events insert + seq-guarded match update).
+ *  False = the in-memory row was stale: another writer advanced the match first.
+ *  `m` is only mutated on success, so callers can reload and retry cleanly. */
+async function persist(
+  m: MatchRow, state: GameState, eventsBatch: GameEvent[], opts: { skipFinish?: boolean } = {},
+): Promise<boolean> {
+  const nextSeq = m.seq + 1;
+  if (!(await saveEvents(m.id, nextSeq, eventsBatch))) {
+    // A row at nextSeq already exists. Either a concurrent writer advanced the match
+    // (its seq moved past ours), or a writer died between its events insert and the
+    // state CAS below, leaving an orphan row that would dup-key every future persist.
+    // If the stored seq still equals ours, it's an orphan: take the row over — the
+    // seq-guarded state update remains the real lock.
+    const stored = await (await matchesCol()).findOne({ _id: m.id }, { projection: { seq: 1 } });
+    if ((stored?.seq ?? 0) !== m.seq) return false;
+    await (await matchEventsCol()).replaceOne(
+      { matchId: m.id, seq: nextSeq },
+      { matchId: m.id, seq: nextSeq, events: eventsBatch },
+    );
+  }
   // Accumulate the objective counters BEFORE handleFinish so the last batch counts.
   const tally = tallyP0(eventsBatch);
-  m.p0Spells = (m.p0Spells ?? 0) + tally.spells;
-  m.p0UnitsLost = (m.p0UnitsLost ?? 0) + tally.unitsLost;
+  const p0Spells = (m.p0Spells ?? 0) + tally.spells;
+  const p0UnitsLost = (m.p0UnitsLost ?? 0) + tally.unitsLost;
   const finished = state.winner !== null;
   const now = Date.now();
-  m.turnDeadline = now + TURN_MS;
-  await (await matchesCol()).updateOne(
-    { _id: m.id },
+  const turnDeadline = now + TURN_MS;
+  const res = await (await matchesCol()).updateOne(
+    { _id: m.id, seq: m.seq },
     {
       $set: {
-        state, seq: m.seq,
+        state, seq: nextSeq,
         status: finished ? "finished" : "active",
         winner: state.winner,
-        turnDeadline: m.turnDeadline,
-        p0Spells: m.p0Spells, p0UnitsLost: m.p0UnitsLost,
+        turnDeadline,
+        p0Spells, p0UnitsLost,
         updatedAt: now,
+        // Abandons pay nothing: mark settlement done in the same atomic write so the
+        // finished-with-no-rewards recovery in stateView never pays them later.
+        ...(finished && opts.skipFinish ? { rewardsSettled: true } : {}),
       },
     },
   );
+  if (res.matchedCount === 0) return false;
+  const wasFinished = m.status === "finished";
+  m.seq = nextSeq;
+  m.state = state;
+  m.p0Spells = p0Spells;
+  m.p0UnitsLost = p0UnitsLost;
+  m.turnDeadline = turnDeadline;
   m.winner = state.winner;
-  if (finished && m.status !== "finished") {
-    m.status = "finished";
-    await handleFinish(m, state);
-  } else if (!finished) {
-    m.status = "active";
-  }
+  m.status = finished ? "finished" : "active";
+  if (finished && !wasFinished && !opts.skipFinish) await handleFinish(m, state);
+  return true;
 }
 
 /** Bot plays while it's the bot's turn. Returns events. */
@@ -260,25 +291,34 @@ async function botPlay(m: MatchRow, state: GameState): Promise<{ state: GameStat
   return { state: cur, events };
 }
 
-/** Enforce expired turn deadlines (auto END_TURN), including bot replies. */
+/** Enforce expired turn deadlines (auto END_TURN), including bot replies.
+ *  A lost CAS just means another request already advanced the match — reload and
+ *  re-check once; never throw on that benign race. */
 export async function enforceDeadlines(m: MatchRow): Promise<void> {
-  if (m.status !== "active") return;
-  let state = structuredClone(m.state);
-  let changed = false;
-  const events: GameEvent[] = [];
-  let guard = 0;
-  while (state.winner === null && Date.now() > m.turnDeadline && guard++ < 8) {
-    const r = applyAction(state, { type: "END_TURN" });
-    if (r.error) break;
-    events.push(...r.events);
-    state = r.state;
-    const bot = await botPlay(m, state);
-    events.push(...bot.events);
-    state = bot.state;
-    changed = true;
-    m.turnDeadline = Date.now() + TURN_MS;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (m.status !== "active") return;
+    let state = structuredClone(m.state);
+    let changed = false;
+    const events: GameEvent[] = [];
+    let guard = 0;
+    let deadline = m.turnDeadline;
+    while (state.winner === null && Date.now() > deadline && guard++ < 8) {
+      const r = applyAction(state, { type: "END_TURN" });
+      if (r.error) break;
+      events.push(...r.events);
+      state = r.state;
+      const bot = await botPlay(m, state);
+      events.push(...bot.events);
+      state = bot.state;
+      changed = true;
+      deadline = Date.now() + TURN_MS;
+    }
+    if (!changed) return;
+    if (await persist(m, state, events)) return;
+    const fresh = await getMatch(m.id);
+    if (!fresh) return;
+    Object.assign(m, fresh);
   }
-  if (changed) await persist(m, state, events);
 }
 
 export function playerIndexIn(m: MatchRow, playerId: number): 0 | 1 | -1 {
@@ -291,31 +331,53 @@ export async function applyPlayerAction(
   m: MatchRow, playerId: number, action: Parameters<typeof applyAction>[1],
 ): Promise<{ ok: boolean; error?: string }> {
   await enforceDeadlines(m);
-  const fresh = (await getMatch(m.id))!;
-  Object.assign(m, fresh);
-  if (m.status !== "active") return { ok: false, error: "Match is over" };
-  const idx = playerIndexIn(m, playerId);
-  if (idx === -1) return { ok: false, error: "Not your match" };
-  let state = structuredClone(m.state);
-  if (state.active !== idx) return { ok: false, error: "Not your turn" };
-  const r = applyAction(state, action);
-  if (r.error) return { ok: false, error: r.error };
-  const events = [...r.events];
-  state = r.state;
-  const bot = await botPlay(m, state);
-  events.push(...bot.events);
-  state = bot.state;
-  await persist(m, state, events);
-  return { ok: true };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const fresh = await getMatch(m.id);
+    if (!fresh) return { ok: false, error: "Match not found" };
+    Object.assign(m, fresh);
+    if (m.status !== "active") return { ok: false, error: "Match is over" };
+    const idx = playerIndexIn(m, playerId);
+    if (idx === -1) return { ok: false, error: "Not your match" };
+    let state = structuredClone(m.state);
+    if (state.active !== idx) return { ok: false, error: "Not your turn" };
+    const r = applyAction(state, action);
+    if (r.error) return { ok: false, error: r.error };
+    const events = [...r.events];
+    state = r.state;
+    const bot = await botPlay(m, state);
+    events.push(...bot.events);
+    state = bot.state;
+    if (await persist(m, state, events)) return { ok: true };
+  }
+  return { ok: false, error: "Match updated concurrently — try again" };
 }
 
 export async function resign(m: MatchRow, playerId: number): Promise<void> {
-  if (m.status !== "active") return;
-  const idx = playerIndexIn(m, playerId);
-  if (idx === -1) return;
-  const state = structuredClone(m.state);
-  state.winner = (1 - idx) as 0 | 1;
-  await persist(m, state, [{ type: "GAME_OVER", winner: state.winner }]);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (m.status !== "active") return;
+    const idx = playerIndexIn(m, playerId);
+    if (idx === -1) return;
+    const state = structuredClone(m.state);
+    state.winner = (1 - idx) as 0 | 1;
+    if (await persist(m, state, [{ type: "GAME_OVER", winner: state.winner }])) return;
+    const fresh = await getMatch(m.id);
+    if (!fresh) return;
+    Object.assign(m, fresh);
+  }
+}
+
+/** Force-finish a match with `byPlayerId` as the loser: no rewards, rating untouched. */
+export async function abandonMatch(matchId: string, byPlayerId: number | string): Promise<void> {
+  const pid = Number(byPlayerId);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const m = await getMatch(matchId);
+    if (!m || m.status !== "active") return;
+    const idx = playerIndexIn(m, pid);
+    if (idx === -1) return;
+    const state = structuredClone(m.state);
+    state.winner = (1 - idx) as 0 | 1;
+    if (await persist(m, state, [{ type: "GAME_OVER", winner: state.winner }], { skipFinish: true })) return;
+  }
 }
 
 /**
@@ -400,6 +462,14 @@ async function scoreCampaignNode(
 }
 
 async function handleFinish(m: MatchRow, state: GameState) {
+  // The payouts below are not atomic: claim the once-flag first so a crash mid-way
+  // stays retryable (stateView re-invokes) while concurrent callers can never double-pay.
+  // `rewardsSettled` deliberately stays out of MatchDoc — it is settlement plumbing.
+  const claim = await (await matchesCol()).findOneAndUpdate(
+    { _id: m.id, status: "finished", rewardsSettled: { $ne: true } } as Filter<MatchDoc>,
+    { $set: { rewardsSettled: true } },
+  );
+  if (!claim) return;
   const rewards: Record<number, FinishRewards> = {};
   for (const idx of [0, 1] as const) {
     const pid = idx === 0 ? m.p0 : m.p1;
@@ -433,14 +503,23 @@ async function handleFinish(m: MatchRow, state: GameState) {
 export async function stateView(m: MatchRow, playerId: number, since: number) {
   await enforceDeadlines(m);
   const fresh = (await getMatch(m.id))!;
+  // A crash between the finish CAS and settlement strands a finished match without
+  // rewards; re-invoke settlement (its once-flag makes this a no-op when already done
+  // or when the match was abandoned).
+  if (fresh.status === "finished" && !fresh.rewards) await handleFinish(fresh, fresh.state);
   const idx = playerIndexIn(fresh, playerId);
   const view = structuredClone(fresh.state);
   const foe = idx === 0 ? 1 : 0;
   view.players[foe].hand = view.players[foe].hand.map(() => "hidden");
   view.players[0].deck = view.players[0].deck.map(() => "hidden");
   view.players[1].deck = view.players[1].deck.map(() => "hidden");
+  // `$lte: fresh.seq` keeps orphan rows from dead writers (seq ahead of the match doc)
+  // out of the client's event stream.
   const rows = await (await matchEventsCol())
-    .find({ matchId: fresh.id, seq: { $gt: since } }, { projection: { events: 1, seq: 1 }, sort: { seq: 1 } })
+    .find(
+      { matchId: fresh.id, seq: { $gt: since, $lte: fresh.seq } },
+      { projection: { events: 1, seq: 1 }, sort: { seq: 1 } },
+    )
     .toArray();
   const events: GameEvent[] = rows.flatMap((r) => r.events ?? [])
     .map((e) => (e.type === "DRAW" && e.player === foe ? { ...e, cardId: undefined } : e));

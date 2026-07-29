@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CARD_POOL } from "@/lib/game/pool";
-import { applyAction, getCard, legalAttackTargets, legalEffectTargets, newGame } from "@/lib/game/engine";
+import { applyAction, getCardSafe, legalAttackTargets, legalEffectTargets, newGame } from "@/lib/game/engine";
 import { aiTakeTurn } from "@/lib/game/ai";
 import { buildStarterDeck } from "@/lib/game/decks";
 import { boardImage, defaultBoardFor } from "@/lib/game/boards";
 import type { ActionResult, FactionId, GameAction, GameEvent, GameState } from "@/lib/game/types";
 import { applyMatchResult, loadProfile, saveProfile } from "@/lib/profile";
+import { usePlayer } from "@/lib/player-context";
 import { applyEventToView, fetchMatch, postMatchAction, type MatchView } from "@/lib/online";
 import CardFace from "@/components/play/CardFace";
 import FramedCard from "@/components/play/FramedCard";
@@ -41,6 +42,8 @@ interface EndedInfo {
   shards?: number; packs?: PacksInput;
   card?: string;
   chapterComplete?: boolean | ChapterBonusInfo | null;
+  /** daily practice cap reached — show the overlay without a reward line */
+  noReward?: boolean;
 }
 
 export default function PlayClient() {
@@ -82,6 +85,10 @@ export default function PlayClient() {
   const [bolts, setBolts] = useState<{ key: number; x: number; y: number; dx: number; dy: number; hue: string }[]>([]);
   const [flyers, setFlyers] = useState<{ key: number; x: number; y: number; dx: number; dy: number }[]>([]);
   const [concedeArmed, setConcedeArmed] = useState(false);
+  const [connLost, setConnLost] = useState(false);
+  const [initError, setInitError] = useState(false);
+
+  const { signedIn, refresh: refreshPlayer } = usePlayer();
 
   const unitRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const handRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -92,6 +99,13 @@ export default function PlayClient() {
   const suppressClick = useRef(false);
   const seqRef = useRef(-1);
   const pollingRef = useRef(false);
+  const pollFailsRef = useRef(0);
+  const pendingRef = useRef(0);
+  // Bumped whenever a send fails: queued optimistic sends captured an older
+  // generation and drop instead of replaying stale handIndex payloads.
+  const genRef = useRef(0);
+  // A send failed AND its resync failed — force a snapshot on the next good poll.
+  const needsResyncRef = useRef(false);
   const netChain = useRef<Promise<void>>(Promise.resolve());
   const gameRef = useRef<GameState | null>(null);
 
@@ -147,13 +161,38 @@ export default function PlayClient() {
   const finishOffline = useCallback(async (won: boolean) => {
     if (endedRef.current) return;
     endedRef.current = true;
+    playSfx(won ? "victory" : "defeat", 0.55);
+    if (signedIn && tutorial) {
+      // tutorials never touch the practice daily cap — no server reward
+      await sleep(400);
+      setEnded({ won, gold: 0, xp: 0, levelUps: 0, noReward: true });
+      return;
+    }
+    if (signedIn) {
+      // signed-in practice: the server grants the reward (and enforces the daily cap)
+      let granted: { gold: number; xp: number; levelUps?: number } | null = null;
+      try {
+        const r = await fetch("/api/practice/finish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ won }),
+        });
+        const j = await r.json();
+        if (r.ok) granted = j.granted ?? { gold: 0, xp: 0 };
+        void refreshPlayer();
+      } catch { /* reward stays server-side truth: show none */ }
+      await sleep(400);
+      setEnded(granted
+        ? { won, gold: granted.gold, xp: granted.xp, levelUps: granted.levelUps ?? 0 }
+        : { won, gold: 0, xp: 0, levelUps: 0, noReward: true });
+      return;
+    }
     const profile = loadProfile();
     const reward = applyMatchResult(profile, won);
     saveProfile(profile);
-    playSfx(won ? "victory" : "defeat", 0.55);
     await sleep(400);
     setEnded({ won, ...reward });
-  }, []);
+  }, [signedIn, tutorial, refreshPlayer]);
 
   const animate = useCallback(async (r: { state: GameState; events: GameEvent[] }, aiSide: boolean) => {
     let spellFrom: { x: number; y: number } | null = null;
@@ -161,7 +200,7 @@ export default function PlayClient() {
     let view: GameState | null = gameRef.current ? structuredClone(gameRef.current) : null;
     const step = (ev: GameEvent) => {
       if (!view) return;
-      view = applyEventToView(view, ev, getCard);
+      view = applyEventToView(view, ev, getCardSafe);
       gameRef.current = view;
       setGame(view);
     };
@@ -303,11 +342,42 @@ export default function PlayClient() {
     await animate({ state: view.state, events: view.events }, false);
     if (view.rewards && !endedRef.current) {
       endedRef.current = true;
+      void refreshPlayer(); // rewards landed server-side — re-sync the wallet
       playSfx((view.rewards as EndedInfo).won ? "victory" : "defeat", 0.55);
       await sleep(400);
       setEnded(view.rewards as EndedInfo);
     }
-  }, [animate]);
+  }, [animate, refreshPlayer]);
+
+  /** Online: jump straight to a server view without animating anything. */
+  const applySnapshot = useCallback(async (view: MatchView) => {
+    seqRef.current = view.seq;
+    setDeadline(view.turnDeadline);
+    if (view.opponent) setOppInfo(view.opponent);
+    setDying(new Set());
+    gameRef.current = view.state;
+    setGame(view.state);
+    if (view.rewards && !endedRef.current) {
+      endedRef.current = true;
+      void refreshPlayer(); // rewards landed server-side — re-sync the wallet
+      playSfx((view.rewards as EndedInfo).won ? "victory" : "defeat", 0.55);
+      await sleep(400);
+      setEnded(view.rewards as EndedInfo);
+    }
+  }, [refreshPlayer]);
+
+  /** Online: full refetch + snapshot when the client and server may disagree. */
+  const resyncNow = useCallback(async (): Promise<boolean> => {
+    if (!matchId) return false;
+    try {
+      const view = await fetchMatch(matchId, -1);
+      if (view.error) return false;
+      await applySnapshot(view);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [matchId, applySnapshot]);
 
   // ---- init -----------------------------------------------------------------
   useEffect(() => {
@@ -316,16 +386,23 @@ export default function PlayClient() {
     startMusic();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const initOnline = useCallback(async () => {
+    if (!matchId) return;
+    try {
+      // jump straight to the current snapshot — never replay match history
+      const view = await fetchMatch(matchId, -1);
+      if (view.error) { setToast(view.error); setTimeout(() => router.push("/"), 1500); return; }
+      setEnemyFaction((view.state.players[1].hero as FactionId) ?? "verdant");
+      await applySnapshot(view);
+      setBanner(view.state.active === 0 ? "Your Turn" : "Enemy Turn");
+      setTimeout(() => setBanner(null), 1200);
+    } catch {
+      setInitError(true);
+    }
+  }, [matchId, applySnapshot, router]);
   useEffect(() => {
     if (online && matchId) {
-      void (async () => {
-        const view = await fetchMatch(matchId, -1);
-        if (view.error) { setToast(view.error); setTimeout(() => router.push("/"), 1500); return; }
-        setEnemyFaction((view.state.players[1].hero as FactionId) ?? "verdant");
-        await absorbView(view);
-        setBanner(view.state.active === 0 ? "Your Turn" : "Enemy Turn");
-        setTimeout(() => setBanner(null), 1200);
-      })();
+      void (async () => { await initOnline(); })();
       return;
     }
     const seed = tutorial ? 12345 : (Date.now() % 2147483647);
@@ -364,26 +441,58 @@ export default function PlayClient() {
         setTimeout(() => setToast(null), 1500);
         return;
       }
-      const skip = optimistic ? optimistic.events.length : 0;
-
       // Confirm with the server in the background, one request at a time.
+      const gen = genRef.current;
       const send = async () => {
-        const view = await postMatchAction(matchId, { action, since: seqRef.current });
-        if (view.error) {
-          setToast(view.error);
-          setTimeout(() => setToast(null), 1600);
-          const resync = await fetchMatch(matchId, -1);
-          if (!resync.error) { seqRef.current = resync.seq; setGame(resync.state); gameRef.current = resync.state; }
+        // A previous send in this chain failed and resynced — this action's
+        // handIndex/uids were computed against a state that no longer exists.
+        if (gen !== genRef.current) return;
+        let view: MatchView;
+        try {
+          view = await postMatchAction(matchId, { action, since: seqRef.current });
+        } catch {
+          genRef.current += 1;
+          pendingRef.current = 0;
+          setConnLost(true);
+          if (await resyncNow()) {
+            pollFailsRef.current = 0;
+            setTimeout(() => setConnLost(false), 1200);
+          } else {
+            needsResyncRef.current = true;
+          }
           return;
         }
-        // the server replays our own events too — don't animate them twice
-        const rest = skip > 0 && view.events.length >= skip ? view.events.slice(skip) : view.events;
-        await absorbView({ ...view, events: rest });
+        if (view.error) {
+          genRef.current += 1;
+          pendingRef.current = 0;
+          setToast(view.error);
+          setTimeout(() => setToast(null), 1600);
+          if (!(await resyncNow())) needsResyncRef.current = true;
+          return;
+        }
+        if (optimistic) pendingRef.current -= 1;
+        if (optimistic) {
+          if (pendingRef.current > 0 && !view.rewards) {
+            // Later optimistic actions are already on the board — applying this
+            // snapshot would roll them back, so only sync the bookkeeping and
+            // let the final confirmation reconcile the state.
+            seqRef.current = view.seq;
+            setDeadline(view.turnDeadline);
+            if (view.opponent) setOppInfo(view.opponent);
+            return;
+          }
+          // our own events already animated optimistically — take the server
+          // state as-is (any extra server events land as an instant update)
+          await applySnapshot(view);
+          return;
+        }
+        await absorbView(view);
       };
 
       if (optimistic) {
         // Play it out locally right now, then hand control straight back —
         // waiting on the round-trip is what made the board feel sticky.
+        pendingRef.current += 1;
         setBusy(true);
         await animate({ state: optimistic.state, events: optimistic.events }, false);
         setBusy(false);
@@ -406,27 +515,48 @@ export default function PlayClient() {
       setTimeLeft(TURN_SECONDS);
     }
     setBusy(false);
-  }, [game, busy, animate, runAiTurn, online, matchId, absorbView]);
+  }, [game, busy, animate, runAiTurn, online, matchId, absorbView, applySnapshot, resyncNow]);
 
   // ---- online polling -------------------------------------------------------
   useEffect(() => {
     if (!online || !matchId || ended) return;
-    const iv = setInterval(async () => {
+    const iv = setInterval(() => {
       if (pollingRef.current || busy) return;
+      // never poll ahead of the init snapshot — since=-1 would replay history
+      if (gameRef.current === null) return;
       pollingRef.current = true;
-      try {
-        const view = await fetchMatch(matchId, seqRef.current);
-        if (!view.error && (view.events.length > 0 || view.seq > seqRef.current || view.rewards)) {
-          await absorbView(view);
-        } else if (!view.error) {
-          setDeadline(view.turnDeadline);
-        }
-      } finally {
-        pollingRef.current = false;
-      }
+      // fetch AND apply on the netChain so a poll can never interleave with an
+      // in-flight action (and always fetches from the freshest seq)
+      netChain.current = netChain.current
+        .then(async () => {
+          if (needsResyncRef.current) {
+            // an unconfirmed action may still be on the board — snapshot first
+            if (await resyncNow()) {
+              needsResyncRef.current = false;
+              pollFailsRef.current = 0;
+              setConnLost(false);
+            }
+            return;
+          }
+          const view = await fetchMatch(matchId, seqRef.current);
+          pollFailsRef.current = 0;
+          setConnLost(false);
+          if (view.error) return;
+          if (view.seq > seqRef.current || view.rewards) {
+            if (seqRef.current === -1) await applySnapshot(view);
+            else await absorbView(view);
+          } else {
+            setDeadline(view.turnDeadline);
+          }
+        })
+        .catch(() => {
+          pollFailsRef.current += 1;
+          if (pollFailsRef.current >= 3) setConnLost(true);
+        })
+        .finally(() => { pollingRef.current = false; });
     }, 2500);
     return () => clearInterval(iv);
-  }, [online, matchId, ended, busy, absorbView]);
+  }, [online, matchId, ended, busy, absorbView, applySnapshot, resyncNow]);
 
   // ---- turn timer -----------------------------------------------------------
   const myTurn = !!game && game.active === 0 && !busy && game.winner === null && !ended;
@@ -517,8 +647,8 @@ export default function PlayClient() {
       const droppedOnField = e.clientY > h * 0.12 && e.clientY < h * 0.74;
       if (!droppedOnField || !game) return;
       const cardId = game.players[0].hand[st.index];
-      if (cardId === undefined) return;
-      const card = getCard(cardId);
+      if (cardId === undefined || cardId === "hidden") return;
+      const card = getCardSafe(cardId);
       if (card.cost > game.players[0].mana) { setToast("Not enough aether"); setTimeout(() => setToast(null), 1200); return; }
       const eff = card.type === "unit" ? card.arrival : card.spell;
       const needsTarget = (eff?.target ?? "NONE") !== "NONE" && legalEffectTargets(game, 0, eff).length > 0;
@@ -536,26 +666,40 @@ export default function PlayClient() {
     return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
   }, [game, doPlayerAction]);
 
-  if (!game) return <div className="playLoading">Entering Kelvarrow…</div>;
+  if (!game) {
+    if (initError) {
+      return (
+        <div className="playLoading" style={{ flexDirection: "column", gap: 18 }}>
+          <span>Connection lost — the Rift will not open.</span>
+          <button className="btn primary" style={{ fontSize: "1rem" }}
+            onClick={() => { setInitError(false); void initOnline(); }}>
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return <div className="playLoading">Entering Kelvarrow…</div>;
+  }
 
   const me = game.players[0];
   const foe = game.players[1];
   const turnMax = online ? ONLINE_TURN_SECONDS : TURN_SECONDS;
 
   const cardNeedsTarget = (handIndex: number): boolean => {
-    const card = getCard(me.hand[handIndex]);
+    const card = getCardSafe(me.hand[handIndex]);
     const eff = card.type === "unit" ? card.arrival : card.spell;
     if ((eff?.target ?? "NONE") === "NONE") return false;
     return legalEffectTargets(game, 0, eff).length > 0;
   };
   const legalCardTargets: number[] = selCard !== null
-    ? legalEffectTargets(game, 0, (() => { const c = getCard(me.hand[selCard]); return c.type === "unit" ? c.arrival : c.spell; })())
+    ? legalEffectTargets(game, 0, (() => { const c = getCardSafe(me.hand[selCard]); return c.type === "unit" ? c.arrival : c.spell; })())
     : [];
   const attackTargets = selAttacker !== null ? legalAttackTargets(game, selAttacker) : [];
 
   const clickHandCard = (i: number) => {
     if (!myTurn || suppressClick.current) return;
-    const card = getCard(me.hand[i]);
+    if (me.hand[i] === "hidden") return; // unresolved optimistic draw — wait for the server card
+    const card = getCardSafe(me.hand[i]);
     if (card.cost > me.mana) { setToast("Not enough aether"); setTimeout(() => setToast(null), 1200); return; }
     if (cardNeedsTarget(i)) { setSelAttacker(null); setSelCard(selCard === i ? null : i); }
     else void doPlayerAction({ type: "PLAY_CARD", handIndex: i });
@@ -586,10 +730,12 @@ export default function PlayClient() {
     if (tutorial) { router.push("/"); return; }
     if (!concedeArmed) { setConcedeArmed(true); setTimeout(() => setConcedeArmed(false), 3000); return; }
     if (online && matchId) {
-      void (async () => {
-        const view = await postMatchAction(matchId, { resign: true, since: seqRef.current });
-        await absorbView(view);
-      })();
+      netChain.current = netChain.current
+        .then(async () => {
+          const view = await postMatchAction(matchId, { resign: true, since: seqRef.current });
+          await absorbView(view);
+        })
+        .catch(() => { setConnLost(true); });
     } else {
       void finishOffline(false);
     }
@@ -603,8 +749,8 @@ export default function PlayClient() {
   const manaFrac = me.manaMax > 0 ? me.mana / me.manaMax : 0;
   const RING_R = 50;
   const RING_C = 2 * Math.PI * RING_R;
-  const zoomDef = zoomCard && zoomCard.id !== "hidden" ? getCard(zoomCard.id) : null;
-  const revealDef = reveal ? getCard(reveal) : null;
+  const zoomDef = zoomCard && zoomCard.id !== "hidden" ? getCardSafe(zoomCard.id) : null;
+  const revealDef = reveal ? getCardSafe(reveal) : null;
 
   /* eslint-disable @next/next/no-img-element */
   return (
@@ -691,7 +837,7 @@ export default function PlayClient() {
       <div className="heroRow bottom">
         <div className="hand">
           {me.hand.map((id, i) => {
-            const card = getCard(id);
+            const card = getCardSafe(id);
             return (
               <div key={`${id}-${i}`}
                 ref={(el) => { if (el) handRefs.current.set(i, el); else handRefs.current.delete(i); }}
@@ -703,7 +849,7 @@ export default function PlayClient() {
                   dragStart.current = { index: i, x: e.clientX, y: e.clientY, moved: false };
                 }}
                 onClick={() => clickHandCard(i)}>
-                <CardFace card={card} variant="hand" playable={myTurn && card.cost <= me.mana} />
+                <CardFace card={card} variant="hand" playable={myTurn && id !== "hidden" && card.cost <= me.mana} />
               </div>
             );
           })}
@@ -730,7 +876,7 @@ export default function PlayClient() {
       {/* dragged card ghost */}
       {drag && (
         <div className="dragGhost" style={{ left: drag.x, top: drag.y }}>
-          <CardFace card={getCard(me.hand[drag.index])} variant="hand" />
+          <CardFace card={getCardSafe(me.hand[drag.index])} variant="hand" />
         </div>
       )}
       {bursts.map((b) => (
@@ -803,6 +949,12 @@ export default function PlayClient() {
         <div className="bigCountdown" key={timeLeft}>{timeLeft}</div>
       )}
 
+      {connLost && !ended && (
+        <div className="playToast" data-testid="conn-banner" style={{ top: 12, bottom: "auto" }}>
+          <span>Connection lost — retrying…</span>
+        </div>
+      )}
+
       {banner && <div className="turnBanner">{banner}</div>}
       {toast && (
         <div className="playToast">
@@ -843,10 +995,12 @@ export default function PlayClient() {
         <div className="endOverlay" data-testid="end-overlay">
           <div className="endCardPanel">
             <h1 className={ended.won ? "vic" : "def"}>{ended.won ? "Victory" : "Defeat"}</h1>
-            <p className="endRewards">
-              +{ended.gold} <img src="/ui/gold.png" alt="gold" /> · +{ended.xp} XP
-              {ended.levelUps > 0 && <span className="levelUp"> · Level up! +{ended.levelUps} pack</span>}
-            </p>
+            {!ended.noReward && (
+              <p className="endRewards">
+                +{ended.gold} <img src="/ui/gold.png" alt="gold" /> · +{ended.xp} XP
+                {ended.levelUps > 0 && <span className="levelUp"> · Level up! +{ended.levelUps} pack</span>}
+              </p>
+            )}
             {ended.ratingDelta !== undefined && (
               <p className={`endRating ${ended.ratingDelta >= 0 ? "up" : "down"}`} data-testid="rating-delta">
                 {ended.ratingDelta >= 0 ? "▲" : "▼"} {Math.abs(ended.ratingDelta)} rating

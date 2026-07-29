@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sessionPlayer } from "@/lib/server/session";
-import { updatePlayer, getPlayerById } from "@/lib/server/players";
+import { logTxn } from "@/lib/server/players";
+import { playersCol } from "@/lib/server/db";
 import { rollPack } from "@/lib/game/packs";
 import { CARD_POOL } from "@/lib/game/pool";
 
@@ -12,13 +13,19 @@ export async function POST(req: Request) {
   if (!player) return NextResponse.json({ error: "Login required" }, { status: 401 });
   const { size } = await req.json();
   if (!SIZES[size]) return NextResponse.json({ error: "Unknown pack" }, { status: 400 });
-  const fresh = (await getPlayerById(player.id))!;
-  const packs = { ...(fresh.packs ?? {}) };
-  if (!packs[size] || packs[size] < 1) return NextResponse.json({ error: "No packs of that size" }, { status: 400 });
-  packs[size] -= 1;
+  const col = await playersCol();
+  const doc = await col.findOneAndUpdate(
+    { _id: player.id, [`packs.${size}`]: { $gte: 1 } },
+    { $inc: { [`packs.${size}`]: -1 } },
+    { returnDocument: "after" },
+  );
+  if (!doc) return NextResponse.json({ error: "No packs of that size" }, { status: 409 });
   const cards = rollPack(CARD_POOL, SIZES[size]);
-  const collection = { ...(fresh.collection ?? {}) };
-  for (const id of cards) collection[id] = (collection[id] ?? 0) + 1;
-  await updatePlayer(player.id, { packs, collection });
-  return NextResponse.json({ cards, packs });
+  const inc: Record<string, number> = {};
+  for (const id of cards) inc[`collection.${id}`] = (inc[`collection.${id}`] ?? 0) + 1;
+  await col.updateOne({ _id: player.id }, { $inc: inc });
+  await logTxn(player.id, {
+    kind: "pack_open", currency: null, amount: 0, itemId: size, meta: { cards },
+  });
+  return NextResponse.json({ cards, packs: doc.packs ?? {} });
 }

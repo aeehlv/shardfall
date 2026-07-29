@@ -18,7 +18,11 @@ async function promptSeed(promptFile?: string, fallback?: string): Promise<strin
   return fallback ?? "";
 }
 
+const studioDisabled = () =>
+  process.env.NODE_ENV === "production" && process.env.STUDIO_ENABLED !== "1";
+
 export async function GET() {
+  if (studioDisabled()) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const slots = await Promise.all(
     STUDIO_SLOTS.map(async (s) => ({
       id: s.id,

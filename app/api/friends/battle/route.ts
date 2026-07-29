@@ -1,18 +1,30 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { sessionPlayer } from "@/lib/server/session";
-import { battleInvitesCol } from "@/lib/server/db";
-import { createMatch } from "@/lib/server/match";
+import { battleInvitesCol, matchesCol } from "@/lib/server/db";
+import { abandonMatch, createMatch } from "@/lib/server/match";
 import { getPlayerById } from "@/lib/server/players";
 import type { FactionId } from "@/lib/game/types";
 
 export const dynamic = "force-dynamic";
+const INVITE_TTL_MS = 300_000;
 const F = (x: unknown): FactionId => (["pyre", "abyss", "verdant"].includes(String(x)) ? (x as FactionId) : "pyre");
 
 /** Invite ids travel to the client as ObjectId hex strings. */
 function toObjectId(raw: unknown): ObjectId | null {
   const s = String(raw ?? "");
   return ObjectId.isValid(s) ? new ObjectId(s) : null;
+}
+
+/** Entering a new friendly forfeits any friendly the player already has running. */
+async function abandonFriendlies(playerId: number) {
+  const rows = await (await matchesCol())
+    .find(
+      { kind: "friendly", status: "active", $or: [{ p0: playerId }, { p1: playerId }] },
+      { projection: { _id: 1 } },
+    )
+    .toArray();
+  for (const r of rows) await abandonMatch(r._id, playerId);
 }
 
 export async function POST(req: Request) {
@@ -23,6 +35,7 @@ export async function POST(req: Request) {
   if (!target) return NextResponse.json({ error: "Unknown player" }, { status: 404 });
   // bots accept instantly → match right away (testable offline)
   if (target.isBot) {
+    await abandonFriendlies(player.id);
     const m = await createMatch({ kind: "friendly", p0: player.id, p1: target.id, p0Faction: F(faction), p1Faction: "abyss" });
     return NextResponse.json({ matchId: m.id });
   }
@@ -50,6 +63,17 @@ export async function PATCH(req: Request) {
     await invites.updateOne({ _id: oid }, { $set: { status: "declined" } });
     return NextResponse.json({ declined: true });
   }
+  if (Date.now() - invite.createdAt > INVITE_TTL_MS) {
+    await invites.updateOne({ _id: oid }, { $set: { status: "expired" } });
+    return NextResponse.json({ error: "Invite expired" }, { status: 409 });
+  }
+  // Never yank the inviter out of a friendly they've since started with someone else.
+  const inviterBusy = await (await matchesCol()).findOne(
+    { kind: "friendly", status: "active", $or: [{ p0: invite.fromId }, { p1: invite.fromId }] },
+    { projection: { _id: 1 } },
+  );
+  if (inviterBusy) return NextResponse.json({ error: "Player is in a match" }, { status: 409 });
+  await abandonFriendlies(player.id);
   const m = await createMatch({
     kind: "friendly", p0: invite.fromId, p1: player.id,
     p0Faction: F(invite.faction), p1Faction: F(faction),

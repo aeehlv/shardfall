@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import SiteFooter from "@/components/SiteFooter";
 import "./login.css";
 
 type Tab = "signin" | "signup";
 
-/** Best-effort import of the local guest profile into the fresh account. */
+/** Best-effort import of the local guest profile into the account (server-side idempotent). */
 async function importGuestProfile() {
   try {
     const raw = localStorage.getItem("shardfall-profile-v1") ?? "{}";
@@ -57,6 +58,7 @@ export default function LoginPage() {
           setError(err.message ?? "Sign in failed.");
           return;
         }
+        await importGuestProfile();
       } else {
         const { error: err } = await authClient.signUp.email({
           email,
@@ -205,6 +207,8 @@ export default function LoginPage() {
           </>
         )}
       </section>
+
+      <SiteFooter />
     </main>
   );
 }

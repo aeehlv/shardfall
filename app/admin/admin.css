@@ -1,0 +1,194 @@
+/* ---- Shardfall admin panel ------------------------------------------------ */
+
+.admMain {
+  position: relative; min-height: 100dvh; display: flex; flex-direction: column;
+  align-items: center; padding: clamp(24px, 5vh, 48px) 24px 120px; overflow-x: hidden;
+}
+
+/* generated back button (same pattern as the leaderboard / store back) */
+.admBack {
+  position: fixed; top: 14px; left: 18px; z-index: 30;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-dark.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px;
+  color: #e8e1d4; font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .85rem;
+  letter-spacing: .06em; text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.admBack:hover { filter: brightness(1.14); }
+
+.admHeader { text-align: center; }
+/* generated header art (same treatment as .lbTitleArt) */
+.admTitleArt {
+  display: block; width: min(560px, 82vw); margin: 4px auto 6px;
+  filter: drop-shadow(0 6px 24px rgba(0,0,0,.8)) drop-shadow(0 0 26px rgba(227,164,74,.22));
+}
+.admHeader p { margin: 2px 0 0; color: var(--muted); font-size: .92rem; font-style: italic; }
+
+/* ---- stat tiles ---- */
+.admTiles {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
+  width: min(980px, 96vw); margin-top: clamp(18px, 3.5vh, 32px);
+}
+.admTile {
+  flex: 1 1 170px; min-width: 150px; max-width: 220px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+  padding: 12px 14px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent);
+  background: linear-gradient(180deg, rgba(28,24,35,.92), rgba(16,13,21,.92));
+  box-shadow: 0 10px 26px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.admTileIcon {
+  flex: none; width: 52px; height: 52px; object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,.6));
+}
+.admTileText { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.admTile b {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: 1.5rem; color: var(--gold); font-variant-numeric: tabular-nums;
+}
+.admTile span {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .6rem;
+  letter-spacing: .2em; text-transform: uppercase; color: #8d8399;
+}
+
+/* ---- search ---- */
+.admControls {
+  display: flex; justify-content: center; width: min(980px, 96vw);
+  margin-top: clamp(16px, 3vh, 26px);
+}
+.admSearch { position: relative; display: inline-flex; align-items: center; }
+.admSearchIcon {
+  position: absolute; left: 13px; color: #8d8399; font-size: 1.35rem; line-height: 1;
+  font-weight: 700; pointer-events: none;
+}
+.admSearch input {
+  width: min(320px, 90vw); padding: 10px 14px 10px 34px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(12,10,17,.82); color: var(--ink);
+  font-family: var(--font-display), Georgia, serif; font-size: .9rem; letter-spacing: .04em;
+  -webkit-appearance: none; appearance: none;
+}
+.admSearch input::placeholder { color: #6f6680; font-style: italic; }
+.admSearch input:focus {
+  outline: none; border-color: rgba(227,164,74,.55);
+  box-shadow: 0 0 0 2px rgba(227,164,74,.14), 0 0 18px rgba(227,164,74,.12);
+}
+
+/* ---- framed player table ---- */
+.admPanel {
+  width: min(980px, 96vw); margin-top: 14px;
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill stretch;
+  border-width: 30px 34px; padding: 4px 10px 10px;
+  filter: drop-shadow(0 14px 34px rgba(0,0,0,.55));
+}
+.admTableWrap { overflow-x: auto; }
+.admTable {
+  width: 100%; border-collapse: collapse;
+  font-size: .88rem; font-variant-numeric: tabular-nums;
+}
+.admTable thead th {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .62rem;
+  letter-spacing: .2em; text-transform: uppercase; color: #8d8399;
+  text-align: left; padding: 4px 10px 10px; white-space: nowrap;
+  border-bottom: 1px solid rgba(227,164,74,.3);
+}
+.admTable td { padding: 9px 10px; border-bottom: 1px solid rgba(46,40,55,.6); }
+.admTable thead th.cNum, .admTable td.cNum { text-align: right; white-space: nowrap; }
+.admTable .cId { width: 54px; color: #8d8399; }
+.admTable .cName { font-weight: 600; color: var(--ink); }
+.admTable .cEmail { color: var(--muted); font-size: .82rem; }
+.admTable .cLeague { white-space: nowrap; }
+.admCrest {
+  display: inline-block; width: 20px; height: 20px; object-fit: contain;
+  vertical-align: -5px; margin-right: 6px; filter: drop-shadow(0 1px 3px rgba(0,0,0,.8));
+}
+.admTable td.gold { color: var(--gold); }
+.admTable td.shards { color: var(--abyss); }
+.admNull { color: #57506a; }
+
+.admRow { cursor: pointer; }
+.admRow:hover td { background: rgba(227,164,74,.055); }
+.admRow.open td {
+  background: rgba(227,164,74,.09); border-bottom-color: transparent;
+}
+
+.admEmpty {
+  margin: 20px 6px 12px; text-align: center; color: var(--muted);
+  font-style: italic; font-size: .92rem;
+}
+
+/* ---- expanded drawer ---- */
+.admDrawerRow > td { padding: 0 10px 14px; background: rgba(12,10,17,.5); }
+.admDrawer {
+  display: flex; flex-wrap: wrap; gap: 18px 28px; padding: 12px 6px 4px;
+}
+.admDrawerCol { flex: 2 1 320px; min-width: 260px; }
+.admDrawerCol h3 {
+  margin: 0 0 8px; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .62rem; letter-spacing: .22em; text-transform: uppercase; color: var(--gold);
+}
+.admDrawerEmpty { margin: 4px 0; color: #6f6680; font-style: italic; font-size: .84rem; }
+
+.admTxns { margin: 0; padding: 0; list-style: none; }
+.admTxn {
+  display: flex; align-items: baseline; gap: 10px; padding: 4px 0;
+  border-bottom: 1px solid rgba(46,40,55,.5); font-size: .8rem;
+}
+.admTxn:last-child { border-bottom: 0; }
+.admTxnWhen {
+  flex: 0 0 auto; color: #6f6680; font-family: var(--font-mono, monospace); font-size: .72rem;
+}
+.admTxnKind { flex: 1 1 auto; color: var(--muted); overflow-wrap: anywhere; }
+.admTxnAmt { flex: 0 0 auto; color: #9fd06c; font-variant-numeric: tabular-nums; }
+.admTxnAmt.neg { color: #e07a6a; }
+
+/* grant controls */
+.admGrantCol { flex: 1 1 200px; max-width: 260px; }
+.admGrantField {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px;
+}
+.admGrantField span {
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .7rem;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.admGrantField input {
+  width: 110px; padding: 7px 10px; border-radius: 8px; text-align: right;
+  border: 1px solid var(--line); background: rgba(12,10,17,.82); color: var(--ink);
+  font-size: .88rem; font-variant-numeric: tabular-nums;
+  -webkit-appearance: none; appearance: none;
+}
+.admGrantField input:focus {
+  outline: none; border-color: rgba(227,164,74,.55);
+  box-shadow: 0 0 0 2px rgba(227,164,74,.14);
+}
+.admGrantBtn {
+  width: 100%; margin-top: 2px;
+  border-style: solid; border-color: transparent; background: none; border-radius: 0;
+  border-image: url("/ui/btn-gold.png") 85 270 fill stretch;
+  border-width: 13px 38px; padding: 2px 2px; cursor: pointer;
+  color: #241505; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .85rem; letter-spacing: .06em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.admGrantBtn:hover:not(:disabled) { filter: brightness(1.12); }
+.admGrantBtn:disabled { filter: grayscale(.5) brightness(.8); cursor: default; }
+.admGrantNote { margin: 8px 0 0; font-size: .8rem; font-style: italic; color: #e07a6a; }
+.admGrantNote.ok { color: #9fd06c; }
+
+/* ---- denied ---- */
+.admDenied {
+  position: relative; margin: auto; text-align: center; max-width: 420px;
+  padding: 30px 34px;
+  border-style: solid; border-color: transparent;
+  border-image: url("/ui/panel-frame.png") 150 170 fill stretch;
+  border-width: 30px 34px;
+  filter: drop-shadow(0 14px 34px rgba(0,0,0,.55));
+}
+.admDenied h1 {
+  margin: 0; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: 1.6rem; letter-spacing: .14em; text-transform: uppercase; color: #f3ead9;
+}
+.admDenied p { margin: 10px 0 18px; color: var(--muted); font-style: italic; font-size: .92rem; }
+.admDeniedBack { position: static; }

@@ -33,7 +33,11 @@ function knockoutWindow(png: PNG): PNG {
   return png;
 }
 
+const studioDisabled = () =>
+  process.env.NODE_ENV === "production" && process.env.STUDIO_ENABLED !== "1";
+
 export async function POST(req: Request) {
+  if (studioDisabled()) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { slotId, image } = (await req.json()) as { slotId: string; image: string };
   const slot = findSlot(slotId);
   if (!slot) return NextResponse.json({ error: "Unknown slot" }, { status: 400 });

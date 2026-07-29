@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CARD_POOL } from "@/lib/game/pool";
 import { loadProfile, type Profile } from "@/lib/profile";
+import { usePlayer } from "@/lib/player-context";
 import type { FactionId, GameCard } from "@/lib/game/types";
 import FramedCard from "@/components/play/FramedCard";
 import "@/app/play/play.css";
@@ -53,6 +54,7 @@ function deckByCost(deck: string[], byId: Map<string, GameCard>) {
 }
 
 export default function CollectionPage() {
+  const { signedIn, sessionLoading, player, error, refresh } = usePlayer();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [tab, setTab] = useState<"all" | FactionId>("all");
   const [openDeck, setOpenDeck] = useState<number | null>(null);
@@ -92,7 +94,22 @@ export default function CollectionPage() {
     [],
   );
 
-  if (!profile) {
+  // Signed-in players browse the server collection; guests keep the local profile.
+  const source = signedIn ? player : profile;
+
+  if (!sessionLoading && signedIn && !player && error) {
+    return (
+      <main className="colMain">
+        <div className="colBackdrop" aria-hidden="true" />
+        <div className="colLoading" data-testid="account-error">
+          <span>Account data unavailable</span>{" "}
+          <button className="colTab" onClick={() => void refresh()}>Retry</button>
+        </div>
+      </main>
+    );
+  }
+
+  if (sessionLoading || !source) {
     return (
       <main className="colMain">
         <div className="colBackdrop" aria-hidden="true" />
@@ -101,10 +118,10 @@ export default function CollectionPage() {
     );
   }
 
-  const owned = (id: string) => profile.collection[id] ?? 0;
+  const owned = (id: string) => source.collection[id] ?? 0;
   const ownedCount = collectible.filter((c) => owned(c.id) > 0).length;
   const shown = tab === "all" ? collectible : collectible.filter((c) => c.faction === tab);
-  const decks = Object.entries(profile.decks);
+  const decks = Object.entries(source.decks);
 
   return (
     <main className="colMain">

@@ -26,6 +26,7 @@ import {
 } from "@/lib/game/campaign-rewards";
 import FramedCard from "@/components/play/FramedCard";
 import StoryCard from "@/components/campaign/StoryCard";
+import { usePlayer } from "@/lib/player-context";
 import "@/app/menu.css";
 import "@/app/play/play.css";
 import "./campaign.css";
@@ -164,6 +165,7 @@ function RewardChips({ reward, muted = false }: { reward: NodeReward; muted?: bo
 
 export default function CampaignPage() {
   const router = useRouter();
+  const { refresh: refreshPlayer } = usePlayer();
   const [loaded, setLoaded] = useState(false);
   const [player, setPlayer] = useState<PlayerDto | null>(null);
   const [dto, setDto] = useState<CampaignNodeDto[]>([]);
@@ -327,6 +329,7 @@ export default function CampaignPage() {
           .map((id: string) => byCardId.get(id))
           .filter((c: GameCard | undefined): c is GameCard => Boolean(c));
         setPlayer((p) => (p ? { ...p, packs: data.packs ?? p.packs } : p));
+        void refreshPlayer(); // collection/pack counts changed server-side
         setFlipped(cards.map(() => false));
         const meta = PACK_META.find((m) => m.id === size);
         setOpening({ packName: meta?.name ?? "Pack", cards });

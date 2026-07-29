@@ -1,4 +1,5 @@
-/** Hot pack deals on the main menu — three staggered 24h cycles (offset 8h), deterministic. */
+/** Hot pack deals on the main menu — three staggered 24h cycles (offset 8h), deterministic.
+ *  Priced in Aethershards (the premium currency), not gold. */
 
 import { PACKS } from "./packs";
 
@@ -6,6 +7,7 @@ export interface HotDeal {
   slot: number;
   pack: (typeof PACKS)[number];
   discountPct: number;
+  /** Price in Aethershards. */
   price: number;
   endsAt: number;
 }
@@ -21,7 +23,7 @@ export function getHotDeals(now = Date.now()): HotDeal[] {
     const discountPct = [25, 30, 40][i];
     return {
       slot: i, pack, discountPct,
-      price: Math.round(pack.gold * (1 - discountPct / 100)),
+      price: Math.max(1, Math.round((pack.gold / 10) * (1 - discountPct / 100))),
       endsAt,
     };
   });

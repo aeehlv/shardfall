@@ -285,6 +285,7 @@
   text-shadow: 0 0 6px rgba(0,0,0,1), 0 0 12px rgba(227,164,74,.8);
 }
 .wRecord { color: rgba(207,199,214,.8); font-size: .8rem; font-family: var(--font-mono, monospace); text-shadow: 0 1px 4px rgba(0,0,0,.9); }
+.walletBar .wDim { opacity: .45; }
 
 @keyframes urgentText { 50% { text-shadow: 0 0 14px rgba(224,86,47,.9); } }
 

@@ -2,7 +2,7 @@
 
 /** A unit on the battlefield. Registers its element for animation targeting. */
 
-import { getCard } from "@/lib/game/engine";
+import { getCardSafe } from "@/lib/game/engine";
 import type { UnitInstance } from "@/lib/game/types";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -28,7 +28,7 @@ export default function UnitTile({
   fx?: FxNumber[];
   children?: ReactNode;
 }) {
-  const card = getCard(unit.cardId);
+  const card = getCardSafe(unit.cardId);
   const damaged = unit.health < unit.maxHealth;
   const cls = [
     "unitTile",

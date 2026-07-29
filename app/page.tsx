@@ -7,7 +7,7 @@ import { CARD_POOL } from "@/lib/game/pool";
 import { buildStarterDeck, starterDeckName } from "@/lib/game/decks";
 import { playableBoards } from "@/lib/game/boards";
 import { addCards, loadProfile, saveProfile, STARTER_DECK_VERSION, type Profile } from "@/lib/profile";
-import { rollPack, PACK_ODDS } from "@/lib/game/packs";
+import { PACK_ODDS } from "@/lib/game/packs";
 import { getCard } from "@/lib/game/engine";
 import FramedCard from "@/components/play/FramedCard";
 import { play as playSfx } from "@/lib/sound";
@@ -15,6 +15,7 @@ import "@/app/play/play.css";
 import { fmtCountdown, getHotDeals } from "@/lib/game/hotdeals";
 import type { FactionId } from "@/lib/game/types";
 import { authClient } from "@/lib/auth-client";
+import { usePlayer, WalletBar } from "@/lib/player-context";
 import Intro from "@/components/menu/Intro";
 import LorePrologue from "@/components/lore/LorePrologue";
 import Landing from "@/components/landing/Landing";
@@ -26,11 +27,9 @@ const FACTIONS: { id: FactionId; name: string; blurb: string; accent: string }[]
   { id: "verdant", name: "Verdant Compact", blurb: "Growth, swarms, the Undersown.", accent: "#8cc152" },
 ];
 
-interface ServerPlayer {
-  id: number; name: string; rating: number; league: string;
-  gold: number; shards: number; xp: number; level: number; wins: number; losses: number;
-  packs: Record<string, number>;
-}
+const MATCH_KIND_LABEL: Record<string, string> = {
+  ranked: "Ranked", campaign: "Campaign", friendly: "Friendly",
+};
 
 export default function MainMenu() {
   return (
@@ -44,9 +43,8 @@ function MenuInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
+  const { player, activeMatches, flags, refresh } = usePlayer();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [serverPlayer, setServerPlayer] = useState<ServerPlayer | null>(null);
-  const [activeMatches, setActiveMatches] = useState<{ id: string; kind: string }[]>([]);
   const [showIntro, setShowIntro] = useState(false);
   const [pickDeck, setPickDeck] = useState(false);
   const [practiceDeck, setPracticeDeck] = useState<FactionId | null>(null);
@@ -57,6 +55,8 @@ function MenuInner() {
   const [dealTick, setDealTick] = useState(Date.now());
   const [dealMsg, setDealMsg] = useState<string | null>(null);
   const [dealOpen, setDealOpen] = useState<number | null>(null);
+  const [dealBusy, setDealBusy] = useState(false);
+  const [grantBusy, setGrantBusy] = useState(false);
   const [opened, setOpened] = useState<string[] | null>(null);
   const [flipped, setFlipped] = useState<Set<number>>(new Set());
   const queueTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -78,18 +78,6 @@ function MenuInner() {
     saveProfile(p);
     setProfile(p);
   }, []);
-
-  useEffect(() => {
-    if (!session?.user) { setServerPlayer(null); return; }
-    void (async () => {
-      const r = await fetch("/api/me", { cache: "no-store" });
-      const j = await r.json();
-      if (j.player) {
-        setServerPlayer(j.player);
-        setActiveMatches(j.activeMatches ?? []);
-      }
-    })();
-  }, [session?.user]);
 
   const stopQueue = useCallback(() => {
     if (queueTimer.current) clearInterval(queueTimer.current);
@@ -136,43 +124,48 @@ function MenuInner() {
     return () => clearInterval(iv);
   }, []);
 
-  /** Demo wallet top-up: server-side when signed in, local profile otherwise. */
+  /** Demo wallet top-up — server-side, gated behind the demoGrants flag. */
   const grant = async (kind: "gold" | "shards") => {
-    if (session?.user) {
+    if (grantBusy) return;
+    setGrantBusy(true);
+    try {
       const r = await fetch("/api/dev/grant", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind }),
       });
-      if (r.ok) {
-        const me = await (await fetch("/api/me", { cache: "no-store" })).json();
-        if (me.player) setServerPlayer(me.player);
-      }
-      return;
+      if (r.ok) await refresh();
+    } finally {
+      setGrantBusy(false);
     }
-    const lp = loadProfile();
-    if (kind === "gold") lp.gold += 500; else lp.shards += 50;
-    saveProfile(lp);
-    setProfile({ ...lp });
   };
 
-  const confirmDeal = (slot: number) => {
-    const deal = getHotDeals(Date.now()).find((d) => d.slot === slot);
-    if (!deal) return;
-    const p = loadProfile();
-    if (p.gold < deal.price) { setDealMsg("Not enough gold"); setTimeout(() => setDealMsg(null), 1800); return; }
-    p.gold -= deal.price;
-    const cards = rollPack(CARD_POOL, deal.pack.cards);
-    addCards(p, cards);
-    saveProfile(p);
-    setProfile({ ...p });
-    playSfx("purchase", 0.5);
-    setDealOpen(null);
-    setOpened(cards);
-    setFlipped(new Set());
-    cards.forEach((_, i) => setTimeout(() => {
-      setFlipped((f) => new Set(f).add(i));
-      playSfx("pack-open", 0.35);
-    }, 450 + i * 380));
+  const confirmDeal = async (slot: number) => {
+    if (dealBusy) return;
+    setDealBusy(true);
+    try {
+      const r = await fetch("/api/store/buy", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "hot-deal", id: String(slot) }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string; cards?: string[] };
+      if (!r.ok) {
+        setDealMsg(j.error ?? "Purchase failed");
+        setTimeout(() => setDealMsg(null), 1800);
+        return;
+      }
+      await refresh();
+      const cards = j.cards ?? [];
+      playSfx("purchase", 0.5);
+      setDealOpen(null);
+      setOpened(cards);
+      setFlipped(new Set());
+      cards.forEach((_, i) => setTimeout(() => {
+        setFlipped((f) => new Set(f).add(i));
+        playSfx("pack-open", 0.35);
+      }, 450 + i * 380));
+    } finally {
+      setDealBusy(false);
+    }
   };
 
   const dismissLore = () => {
@@ -190,8 +183,6 @@ function MenuInner() {
     saveProfile(p);
     setProfile(p);
   };
-
-  const wallet = serverPlayer ?? profile;
 
   if (!sessionPending && !session?.user) {
     return <Landing />;
@@ -214,14 +205,16 @@ function MenuInner() {
       <div className="accountChip" data-testid="account">
         {session?.user ? (
           <>
-            <b>{serverPlayer?.name ?? session.user.name}</b>
-            {serverPlayer && (
-              <span className={`leagueTag l-${serverPlayer.league}`}>
-                <img className="leagueCrest" src={`/ui/leagues/${serverPlayer.league.toLowerCase()}.png`} alt="" />
-                {serverPlayer.league} · {serverPlayer.rating}
+            <Link href="/account" title="Account" data-testid="account-link">
+              <b>{player?.name ?? session.user.name}</b>
+            </Link>
+            {player && (
+              <span className={`leagueTag l-${player.league}`}>
+                <img className="leagueCrest" src={`/ui/leagues/${player.league.toLowerCase()}.png`} alt="" />
+                {player.league} · {player.rating}
               </span>
             )}
-            <button className="menuSmall" onClick={() => { void authClient.signOut(); setServerPlayer(null); }}>Sign out</button>
+            <button className="menuSmall" onClick={() => void authClient.signOut()}>Sign out</button>
           </>
         ) : (
           <Link className="loginBtn" href="/login" data-testid="menu-login">Sign in · Register</Link>
@@ -247,21 +240,14 @@ function MenuInner() {
           <span>Store</span>
         </Link>
       </div>
-      {wallet && (
-        <div className="walletBar" data-testid="wallet">
-          <span className="wRes"><img src="/ui/gold.png" alt="gold" /><b>{wallet.gold}</b></span>
-          <span className="wRes"><img src="/ui/shard.png" alt="shards" /><b>{wallet.shards}</b></span>
-          <span className="wLevel"><img src="/ui/emblem.png" alt="" /><i>{wallet.level}</i></span>
-          <span className="wRecord">{wallet.wins}W · {wallet.losses}L</span>
-        </div>
-      )}
+      <WalletBar />
 
-      {activeMatches.length > 0 && (
-        <button className="resumeBanner" data-testid="resume-match"
-          onClick={() => router.push(`/play?match=${activeMatches[0].id}`)}>
-          ⚔ Resume your {activeMatches[0].kind} battle
+      {activeMatches.map((m) => (
+        <button key={m.id} className="resumeBanner" data-testid="resume-match"
+          onClick={() => router.push(`/play?match=${m.id}`)}>
+          ⚔ Resume your {MATCH_KIND_LABEL[m.kind] ?? m.kind} battle
         </button>
-      )}
+      ))}
 
       {session?.user && (
         <div className="hotDeals" data-testid="hot-deals">
@@ -275,14 +261,13 @@ function MenuInner() {
                 <span className="hotOff">-{d.discountPct}%</span>
               </span>
               <span className="hotPrice">
-                <s>{d.pack.gold}</s> {d.price} <img src="/ui/gold.png" alt="gold" />
+                <s>{Math.round(d.pack.gold / 10)}</s> {d.price} <img src="/ui/shard.png" alt="shards" />
               </span>
               <span className={`hotTimer${d.endsAt - dealTick < 3 * 3600_000 ? " soon" : ""}`}>
                 {fmtCountdown(d.endsAt - dealTick)}
               </span>
             </button>
           ))}
-          {dealMsg && <p className="hotMsg">{dealMsg}</p>}
         </div>
       )}
 
@@ -348,9 +333,9 @@ function MenuInner() {
             {!queueFaction ? (
               <>
                 <h2>Ranked Battle</h2>
-                {serverPlayer && (
+                {player && (
                   <p className="queueMeta">
-                    <span className={`leagueTag l-${serverPlayer.league}`}>{serverPlayer.league}</span> · {serverPlayer.rating} rating
+                    <span className={`leagueTag l-${player.league}`}>{player.league}</span> · {player.rating} rating
                   </p>
                 )}
                 <p className="queueHint">Choose your deck — we&apos;ll find an opponent of similar skill in your league.</p>
@@ -382,14 +367,20 @@ function MenuInner() {
         {moreOpen && (
           <div className="morePop">
             <Link className="moreLink" href="/play?deck=pyre&tutorial=1">Replay tutorial</Link>
-            <div className="moreDivider" aria-hidden="true" />
-            <span className="moreDevLabel">Demo top-up</span>
-            <button className="moreLink dev" data-testid="admin-gold" onClick={() => void grant("gold")}>
-              +500 gold
-            </button>
-            <button className="moreLink dev" data-testid="admin-shards" onClick={() => void grant("shards")}>
-              +50 shards
-            </button>
+            {flags.demoGrants && (
+              <>
+                <div className="moreDivider" aria-hidden="true" />
+                <span className="moreDevLabel">Demo top-up</span>
+                <button className="moreLink dev" data-testid="admin-gold" disabled={grantBusy}
+                  onClick={() => void grant("gold")}>
+                  +500 gold
+                </button>
+                <button className="moreLink dev" data-testid="admin-shards" disabled={grantBusy}
+                  onClick={() => void grant("shards")}>
+                  +50 shards
+                </button>
+              </>
+            )}
           </div>
         )}
         <button className="moreBtn" aria-label="More" onClick={() => setMoreOpen((o) => !o)}>
@@ -400,7 +391,7 @@ function MenuInner() {
       {dealOpen !== null && (() => {
         const d = getHotDeals(dealTick).find((x) => x.slot === dealOpen);
         if (!d) return null;
-        const affordable = (wallet?.gold ?? 0) >= d.price;
+        const affordable = (player?.shards ?? 0) >= d.price;
         return (
           <div className="dealOverlay" data-testid="deal-modal" onClick={() => setDealOpen(null)}>
             <div className="dealPanel" onClick={(e) => e.stopPropagation()}>
@@ -414,14 +405,15 @@ function MenuInner() {
                 ))}
               </ul>
               <div className="dealPriceRow">
-                <s>{d.pack.gold}</s>
+                <s>{Math.round(d.pack.gold / 10)}</s>
                 <b>{d.price}</b>
-                <img src="/ui/gold.png" alt="gold" />
+                <img src="/ui/shard.png" alt="shards" />
               </div>
+              {dealMsg && <p className="hotMsg">{dealMsg}</p>}
               <div className="dealBtns">
-                <button className="menuBtn primary" data-testid="deal-buy" disabled={!affordable}
-                  onClick={() => confirmDeal(d.slot)}>
-                  {affordable ? "Buy & Open" : "Not enough gold"}
+                <button className="menuBtn primary" data-testid="deal-buy" disabled={!affordable || dealBusy}
+                  onClick={() => void confirmDeal(d.slot)}>
+                  {dealBusy ? "…" : affordable ? "Buy & Open" : "Not enough shards"}
                 </button>
                 <button className="menuSmall" onClick={() => setDealOpen(null)}>Cancel</button>
               </div>
@@ -454,7 +446,10 @@ function MenuInner() {
         </div>
       )}
 
-      <footer className="menuFooter">Kelvarrow · v0.2 · {CARD_POOL.filter((c) => !c.token).length} cards in the pool</footer>
+      <footer className="menuFooter">
+        Kelvarrow · v0.2 · {CARD_POOL.filter((c) => !c.token).length} cards in the pool
+        {" · "}<Link href="/privacy">Privacy</Link>{" · "}<Link href="/terms">Terms</Link>{" · "}<Link href="/account">Account</Link>
+      </footer>
     </main>
   );
   /* eslint-enable @next/next/no-img-element */

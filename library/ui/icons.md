@@ -39,3 +39,44 @@ A single small fantasy game icon of a jagged crystalline shard fragment floating
 
 **PROMPT:**
 A single small fantasy game icon of a sealed rectangular card pack standing upright, wrapped in dark parchment bound with a bronze clasp, warm golden crystal-light leaking from the slightly lifted top flap as if the cards inside are glowing, a few motes of radiance escaping the seam, bold upright rectangular silhouette that reads at tiny size, the wrapper face kept smooth and blank. Palette of dark parchment brown, aged bronze, and warm golden shard-light. The object floats centered and isolated on a flat near-black background with generous empty margin, nothing else in frame. Lit by the warm glow escaping its seams, enticing and mysterious mood. Painterly digital fantasy illustration, rich saturated color, confident visible brushstrokes, dramatic cinematic lighting, AAA collectible card game interface art quality. Square 1:1 aspect ratio. No text, no lettering, no numbers, no watermark, no border, no UI elements.
+
+## 7. Duelists Icon (admin stat: players)
+
+**PROMPT:**
+A single small fantasy game icon of an ornate knight's great helm facing forward, burnished steel with restrained antique-gold filigree trim and a short crest ridge, a dark shadowed eye slit, bold simple silhouette that reads at tiny size. Palette of cool polished steel, antique gold trim, and deep charcoal shadow. The object floats centered and isolated on a flat near-black background with generous empty margin, nothing else in frame. Lit by a warm top-down key light with a single bright glint, proud and vigilant mood. Painterly digital fantasy illustration, rich saturated color, confident visible brushstrokes, dramatic cinematic lighting, AAA collectible card game interface art quality. Square 1:1 aspect ratio. No text, no lettering, no numbers, no watermark, no border, no UI elements.
+
+## 8. Battles Icon (admin stat: active matches)
+
+**PROMPT:**
+A single small fantasy game icon of two broad double-edged swords crossed in an X, forged steel blades with ember-orange glints along their edges and compact bronze crossguards, bold symmetrical silhouette that reads at tiny size. Palette of cool steel grey, blackened bronze, and hot ember-orange edge highlights. The object floats centered and isolated on a flat near-black background with generous empty margin, nothing else in frame. Dramatic edge lighting with a bright spark of light at the crossing point, clashing and decisive mood. Painterly digital fantasy illustration, rich saturated color, confident visible brushstrokes, dramatic cinematic lighting, AAA collectible card game interface art quality. Square 1:1 aspect ratio. No text, no lettering, no numbers, no watermark, no border, no UI elements.
+
+## 9. Victories Icon (admin stat: finished matches)
+
+**PROMPT:**
+A single small fantasy game icon of a golden laurel wreath formed of two curved branches sweeping upward and almost meeting at the top, hammered antique-gold leaves catching bright metallic highlights, a small warm gem set where the stems cross at the bottom, bold open circular silhouette that reads at tiny size. Warm yellow-gold palette with deep amber shadows and bright metallic glints. The object floats centered and isolated on a flat near-black background with generous empty margin, nothing else in frame. Lit by a warm top-down key light with strong metallic sparkle, triumphant and honored mood. Painterly digital fantasy illustration, rich saturated color, confident visible brushstrokes, dramatic cinematic lighting, AAA collectible card game interface art quality. Square 1:1 aspect ratio. No text, no lettering, no numbers, no watermark, no border, no UI elements.
+
+## 10. Ledger Icon (admin stat: transactions)
+
+**PROMPT:**
+A single small fantasy game icon of a pale feather quill resting diagonally across a partially unrolled parchment scroll with aged bronze end-caps, the quill tip touched with dark ink, the parchment face kept smooth and completely blank with no writing, bold simple silhouette that reads at tiny size. Palette of warm parchment cream, aged bronze, and soft ivory feather with a gold glint. The object floats centered and isolated on a flat near-black background with generous empty margin, nothing else in frame. Lit by a warm candle-like key light, studious and meticulous mood. Painterly digital fantasy illustration, rich saturated color, confident visible brushstrokes, dramatic cinematic lighting, AAA collectible card game interface art quality. Square 1:1 aspect ratio. No text, no lettering, no numbers, no watermark, no border, no UI elements.
+
+## 11. Cards Fan Icon (account collection tile)
+
+**PROMPT:**
+A single small fantasy game icon of three ornate trading card backs fanned in a tight overlapping arc, each card back deep midnight blue edged with antique-gold filigree borders and bearing a small glowing crystal-shard emblem at its center, the card faces kept smooth with no writing, bold fanned silhouette that reads at tiny size. Palette of deep midnight blue, antique gold, and warm golden crystal glow. The object floats centered and isolated on a flat near-black background with generous empty margin, nothing else in frame. Lit by the soft glow of the shard emblems with warm gold edge glints, enticing and collectible mood. Painterly digital fantasy illustration, rich saturated color, confident visible brushstrokes, dramatic cinematic lighting, AAA collectible card game interface art quality. Square 1:1 aspect ratio. No text, no lettering, no numbers, no watermark, no border, no UI elements.
+
+---
+
+## Icon generation pipeline note (2026-07-29)
+
+- Model `recraft/recraft-v4.1` via the AI Gateway `v1/images/generations` endpoint currently
+  accepts **only `size: "1024x1024"`** (every other size string returns 400) and returns the
+  image as **base64 WebP** in `data[0].b64_json` — convert to real PNG before archiving to
+  `library/art/history/<asset-id>/vNNN.png`.
+- Web-ready icons are produced by flood-filling the background to transparency **from the image
+  edges** using color distance from the corner background color (tolerance ~45, so dark interior
+  details survive), cropping to the content bounding box (+4px pad), and box-filter downscaling
+  to max 256px. Shipped this way: `public/ui/icon-duelists.png`, `icon-battles.png`,
+  `icon-victories.png`, `icon-ledger.png`, `pack.png` (from prompt 6 verbatim), `cards-fan.png`.
+- These are dark-background knockouts like `gold.png` / `shard.png`: near-black shading touching
+  the background keys out, so render them **on dark UI surfaces only**.
