@@ -10,6 +10,7 @@
 import {
   ensureSchema, getMongoClient, leagueFor, playersCol, reservePlayerIds, type PlayerDoc,
 } from "../lib/server/db";
+import { uniqueBotName } from "../lib/game/bot-names";
 
 /** Scripts run outside Next, so pull MONGODB_URI out of .env.local / .env ourselves.
  *  (db.ts reads process.env lazily, so doing this after the imports is safe.) */
@@ -20,13 +21,6 @@ for (const file of [".env.local", ".env"]) {
 const TOTAL = 10_000;
 const ELITES = 220;
 const BATCH = 1000;
-
-const ADJ = ["Ember", "Shard", "Gloom", "Storm", "Iron", "Ash", "Tide", "Root", "Gold", "Pale",
-  "Grim", "Swift", "Dusk", "Dawn", "Hollow", "Bright", "Silent", "Wild", "Frost", "Crag",
-  "Molten", "Deep", "Verdant", "Star", "Rune", "Oath", "Blood", "Sun", "Moon", "Void"];
-const NOUN = ["blade", "song", "hammer", "warden", "whisper", "fang", "crown", "seeker", "caller", "born",
-  "hunter", "weaver", "keeper", "strider", "bane", "heart", "gaze", "shield", "spear", "wing",
-  "howl", "root", "spark", "tide", "veil", "mark", "forge", "path", "watcher", "reign"];
 
 function mulberry(seed: number) {
   return () => {
@@ -40,10 +34,6 @@ function mulberry(seed: number) {
 const rand = mulberry(20260727);
 /** Separate stream so the 10,000 keep their original ratings bit-for-bit. */
 const eliteRand = mulberry(20260728);
-
-/** Legend-tier name parts. */
-const ELITE_PREFIX = ["Arch", "Prime", "Grand", "High", "True", "Elder"];
-const ELITE_NOUN = ["Duskmarshal", "Crucible", "Graftking", "Shardlord", "Voicebane", "Worldsinger"];
 
 function baseDoc(id: number, name: string, rating: number, wins: number, losses: number, level: number): PlayerDoc {
   return {
@@ -106,15 +96,7 @@ async function main() {
     const docs: PlayerDoc[] = [];
 
     for (let i = 0; i < TOTAL; i++) {
-      let name: string;
-      if (i % 2 === 0) {
-        name = `player${String(10_000_000 + Math.floor(rand() * 89_999_999))}`;
-      } else {
-        do {
-          name = `${ADJ[Math.floor(rand() * ADJ.length)]}${NOUN[Math.floor(rand() * NOUN.length)]}${rand() < 0.35 ? String(Math.floor(rand() * 99)) : ""}`;
-        } while (usedNames.has(name));
-        usedNames.add(name);
-      }
+      const name = uniqueBotName(rand, usedNames);
       // rating ~ normal(1200, 250) clamped
       const r = Math.round(1200 + (rand() + rand() + rand() + rand() - 2) * 250);
       const rating = Math.max(700, Math.min(2400, r));
@@ -136,13 +118,7 @@ async function main() {
     const firstEliteId = await reservePlayerIds(ELITES);
     const docs: PlayerDoc[] = [];
     for (let i = 0; i < ELITES; i++) {
-      let name: string;
-      do {
-        name = `${ELITE_PREFIX[Math.floor(eliteRand() * ELITE_PREFIX.length)]}`
-          + `${ELITE_NOUN[Math.floor(eliteRand() * ELITE_NOUN.length)]}`
-          + String(1 + Math.floor(eliteRand() * 999));
-      } while (eliteNames.has(name));
-      eliteNames.add(name);
+      const name = uniqueBotName(eliteRand, eliteNames);
       const rating = 1700 + Math.floor(eliteRand() * 700);
       const games = 200 + Math.floor(eliteRand() * 400);
       const wins = Math.round(games * 0.6);
