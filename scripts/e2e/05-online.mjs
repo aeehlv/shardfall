@@ -99,12 +99,24 @@ await sleep(1200);
 const nameInput = await page.$('[data-testid="friend-name"]');
 checks.push(["friends page loads", !!nameInput]);
 if (nameInput) {
-  await nameInput.type("Grimspark91");
+  // top Legend player — that tier is populated exclusively by seeded ladder bots,
+  // so the pick survives reseeds/renames of the bot roster
+  const botName = await page.evaluate(async () => {
+    const res = await fetch("/api/leaderboard?league=Legend&pageSize=1");
+    const data = await res.json();
+    return data.rows?.[0]?.name ?? "";
+  });
+  checks.push(["ladder bot found to befriend", !!botName]);
+  await nameInput.type(botName);
+  const addAccepted = page
+    .waitForResponse((r) => r.url().includes("/api/friends") && r.request().method() === "POST", { timeout: 8000 })
+    .then((r) => r.json()).then((body) => !!body.accepted).catch(() => false);
   await page.click('[data-testid="friend-add"]');
+  const accepted = await addAccepted;
   // the friends list refreshes on a 5s poll
   await page.waitForSelector('[data-testid^="challenge-"]', { timeout: 12000 }).catch(() => {});
   const challenge = await page.$('[data-testid^="challenge-"]');
-  checks.push(["bot friend added & challengeable", !!challenge]);
+  checks.push(["bot friend added & challengeable", accepted && !!challenge]);
   if (challenge) {
     await challenge.click();
     await sleep(400);

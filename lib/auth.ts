@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
+import { magicLink } from "better-auth/plugins/magic-link";
 import {
   battleInvitesCol,
   campaignChapterRewardsCol,
@@ -14,6 +15,7 @@ import {
   transactionsCol,
 } from "./server/db";
 import { abandonMatch } from "./server/match";
+import { sendMagicLinkMail } from "./server/mailer";
 
 /** Local dev + LAN origins that must keep working alongside the deployed ones. */
 const LOCAL_ORIGINS = [
@@ -77,14 +79,21 @@ async function purgePlayerData(userId: string): Promise<void> {
 const database: ReturnType<typeof mongodbAdapter> = (options) =>
   mongodbAdapter(getDbSync(), { client: getMongoClient() })(options);
 
-/** better-auth server config — email+password on MongoDB (Atlas). */
+/** better-auth server config — email+password and magic links on MongoDB (Atlas). */
 export const auth = betterAuth({
   database,
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
-    minPasswordLength: 6,
+    minPasswordLength: 8,
   },
+  plugins: [
+    magicLink({
+      sendMagicLink: async ({ email, url }) => {
+        await sendMagicLinkMail({ email, url });
+      },
+    }),
+  ],
   session: {
     expiresIn: 60 * 60 * 24 * 30,
   },

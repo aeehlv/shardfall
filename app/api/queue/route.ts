@@ -3,10 +3,10 @@ import type { Collection } from "mongodb";
 import { sessionPlayer } from "@/lib/server/session";
 import { playersCol, queueCol, type QueueDoc } from "@/lib/server/db";
 import { activeMatchesFor, createMatch } from "@/lib/server/match";
+import { getBotWaitMs } from "@/lib/server/settings";
 import type { FactionId } from "@/lib/game/types";
 
 export const dynamic = "force-dynamic";
-const BOT_FALLBACK_MS = 15_000;
 // The client polls every 1.5s; a ticket whose heartbeat lapsed is unpairable, and
 // anything silent for 10 minutes gets swept.
 const BEAT_FRESH_MS = 30_000;
@@ -141,8 +141,8 @@ export async function GET() {
     await queue.updateOne({ _id: other._id, matchId: claimTag }, { $set: { matchId: m.id } });
     return NextResponse.json({ matchId: m.id });
   }
-  // bot fallback after 15s: closest-rated bot
-  if (waited >= BOT_FALLBACK_MS) {
+  // bot fallback (admin-tunable wait, default 5s): closest-rated bot
+  if (waited >= (await getBotWaitMs())) {
     const players = await playersCol();
     // Two index-backed probes (the {isBot, rating} index) beat scanning for MIN(ABS(diff)).
     const [above, below] = await Promise.all([

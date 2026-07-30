@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
+import { authClient, newPasswordIssue } from "@/lib/auth-client";
 import { usePlayer } from "@/lib/player-context";
 import SiteFooter from "@/components/SiteFooter";
 import "@/app/menu.css";
@@ -139,6 +139,11 @@ export default function AccountPage() {
     if (pwBusy) return;
     setPwError(null);
     setPwDone(false);
+    const pwIssue = newPasswordIssue(newPassword);
+    if (pwIssue) {
+      setPwError(pwIssue);
+      return;
+    }
     setPwBusy(true);
     try {
       const { error: err } = await authClient.changePassword({
@@ -292,8 +297,8 @@ export default function AccountPage() {
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="At least 6 characters"
-                    minLength={6}
+                    placeholder="8+ characters, letters and numbers"
+                    minLength={8}
                     autoComplete="new-password"
                     required
                   />

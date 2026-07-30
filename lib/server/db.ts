@@ -143,6 +143,13 @@ export interface CounterDoc {
   seq: number;
 }
 
+/** Admin-tunable key-value setting (e.g. "matchmaking.botWaitMs"). */
+export interface SettingDoc {
+  _id: string;
+  value: unknown;
+  updatedAt: number;
+}
+
 // ------------------------------------------------------------------- client --
 
 declare global {
@@ -323,6 +330,9 @@ export async function countersCol(): Promise<Collection<CounterDoc>> {
 }
 export async function transactionsCol(): Promise<Collection<TransactionDoc>> {
   return (await getDb()).collection<TransactionDoc>("transactions");
+}
+export async function settingsCol(): Promise<Collection<SettingDoc>> {
+  return (await getDb()).collection<SettingDoc>("settings");
 }
 
 // ------------------------------------------------------------------ counters --

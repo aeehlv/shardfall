@@ -86,7 +86,8 @@ behind `STUDIO_ENABLED`).
   URI path, else "shardfall"), `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`, `TRUSTED_ORIGINS`
   (optional, comma-separated extra allowed origins), `DEMO_GRANTS` (enables `/api/dev/grant`,
   5/kind/day), `ADMIN_EMAILS` (comma-separated admin allowlist), `STUDIO_ENABLED`,
-  `AI_GATEWAY_API_KEY`.
+  `AI_GATEWAY_API_KEY`, `RESEND_API_KEY` (magic-link mail; empty = dev logs the link to the
+  server console), `MAIL_FROM` (magic-link sender address).
 - Card art for the game pool: `public/cards/art/game/<id>.jpg` (640w), generated from each
   card's `artPrompt` field (kept in cards-data.ts).
 - `lib/frames.ts` — frame registry (faction → frame PNG + layout, incl. the neutral stone frame);

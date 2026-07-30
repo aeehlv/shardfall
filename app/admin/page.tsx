@@ -155,6 +155,85 @@ function PlayerDrawer({
   );
 }
 
+/** Matchmaking tuning: the bot-fallback wait, edited in seconds. */
+function MatchmakingPanel() {
+  const [waitSec, setWaitSec] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/settings", { cache: "no-store", signal: ctrl.signal });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const json = (await res.json()) as { settings: { botWaitMs: number } };
+        if (!ctrl.signal.aborted) {
+          setWaitSec((json.settings.botWaitMs / 1000).toFixed(1));
+          setLoaded(true);
+        }
+      } catch {
+        if (!ctrl.signal.aborted) setNote({ ok: false, text: "The setting could not be read." });
+      }
+    })();
+    return () => ctrl.abort();
+  }, []);
+
+  const save = async () => {
+    const sec = Number(waitSec);
+    if (!Number.isFinite(sec) || sec <= 0) {
+      setNote({ ok: false, text: "Enter a wait in seconds." });
+      return;
+    }
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ botWaitMs: Math.round(sec * 1000) }),
+      });
+      const json = (await res.json()) as { settings?: { botWaitMs: number }; error?: string };
+      if (!res.ok || !json.settings) throw new Error(json.error || `status ${res.status}`);
+      setWaitSec((json.settings.botWaitMs / 1000).toFixed(1));
+      setNote({ ok: true, text: "Saved." });
+    } catch (err) {
+      setNote({ ok: false, text: err instanceof Error ? err.message : "Save failed." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="admMmPanel" data-testid="admin-matchmaking">
+      <h3>Matchmaking</h3>
+      <p className="admMmHint">How long a duelist waits for a rival before a bot answers the call.</p>
+      <div className="admMmRow">
+        <label className="admGrantField admMmField">
+          <span>Bot wait (s)</span>
+          <input
+            type="number" min={1} max={60} step={0.5} value={waitSec} placeholder="5.0"
+            disabled={!loaded}
+            data-testid="admin-botwait"
+            onChange={(e) => setWaitSec(e.target.value)}
+          />
+        </label>
+        <button
+          className="admGrantBtn admMmSave" disabled={busy || !loaded}
+          data-testid="admin-botwait-save"
+          onClick={() => void save()}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+      </div>
+      {note && (
+        <p className={`admGrantNote${note.ok ? " ok" : ""}`}>{note.text}</p>
+      )}
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const [denied, setDenied] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -287,6 +366,8 @@ export default function AdminPage() {
         </div>
       </section>
       {/* eslint-enable @next/next/no-img-element */}
+
+      <MatchmakingPanel />
 
       <div className="admControls">
         <label className="admSearch">

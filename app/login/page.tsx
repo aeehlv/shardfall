@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
+import { authClient, newPasswordIssue } from "@/lib/auth-client";
 import SiteFooter from "@/components/SiteFooter";
 import "./login.css";
 
@@ -32,9 +32,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // magic link: email the link went to (null = password form), resend cooldown in seconds
+  const [magicSent, setMagicSent] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
   const switchTab = (t: Tab) => {
     setTab(t);
     setError(null);
+    setMagicSent(null);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -46,6 +57,11 @@ export default function LoginPage() {
       const duelist = name.trim();
       if (duelist.length < 3 || duelist.length > 20) {
         setError("Duelist name must be 3–20 characters.");
+        return;
+      }
+      const pwIssue = newPasswordIssue(password);
+      if (pwIssue) {
+        setError(pwIssue);
         return;
       }
     }
@@ -72,6 +88,28 @@ export default function LoginPage() {
         await importGuestProfile();
       }
       window.location.href = "/";
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendMagicLink = async () => {
+    if (busy || cooldown > 0) return;
+    setError(null);
+    const to = email.trim();
+    if (!to.includes("@")) {
+      setError("Enter your email above to receive a sign-in link.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error: err } = await authClient.signIn.magicLink({ email: to, callbackURL: "/" });
+      if (err) {
+        setError(err.message ?? "Could not send the sign-in link.");
+        return;
+      }
+      setMagicSent(to);
+      setCooldown(30);
     } finally {
       setBusy(false);
     }
@@ -138,66 +176,109 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <form className="loginForm" onSubmit={submit}>
-              {tab === "signup" && (
+            {magicSent ? (
+              <div className="loginSession" data-testid="auth-magic-sent">
+                <p className="loginSignedIn">
+                  Check your inbox — a sign-in link is on its way to <b>{magicSent}</b>.
+                </p>
+                <p className="loginNote">
+                  The link signs you in directly and expires after a few minutes.
+                </p>
+                {error && (
+                  <p className="authError" data-testid="auth-error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <button
+                  className="loginSubmit"
+                  type="button"
+                  onClick={() => void sendMagicLink()}
+                  disabled={busy || cooldown > 0}
+                >
+                  {cooldown > 0
+                    ? `Resend link (${cooldown}s)`
+                    : busy
+                      ? "Sending…"
+                      : "Resend link"}
+                </button>
+                <button className="loginGhost" type="button" onClick={() => setMagicSent(null)}>
+                  Use a password instead
+                </button>
+              </div>
+            ) : (
+              <form className="loginForm" onSubmit={submit}>
+                {tab === "signup" && (
+                  <label className="loginField">
+                    <span>Duelist name</span>
+                    <input
+                      data-testid="auth-name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="3–20 characters"
+                      minLength={3}
+                      maxLength={20}
+                      autoComplete="nickname"
+                      required
+                    />
+                  </label>
+                )}
+
                 <label className="loginField">
-                  <span>Duelist name</span>
+                  <span>Email</span>
                   <input
-                    data-testid="auth-name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="3–20 characters"
-                    minLength={3}
-                    maxLength={20}
-                    autoComplete="nickname"
+                    data-testid="auth-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
                     required
                   />
                 </label>
-              )}
 
-              <label className="loginField">
-                <span>Email</span>
-                <input
-                  data-testid="auth-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                  required
-                />
-              </label>
+                <label className="loginField">
+                  <span>Password</span>
+                  <input
+                    data-testid="auth-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={tab === "signin" ? "Your password" : "8+ characters, letters and numbers"}
+                    minLength={tab === "signin" ? 6 : 8}
+                    autoComplete={tab === "signin" ? "current-password" : "new-password"}
+                    required
+                  />
+                </label>
 
-              <label className="loginField">
-                <span>Password</span>
-                <input
-                  data-testid="auth-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  minLength={6}
-                  autoComplete={tab === "signin" ? "current-password" : "new-password"}
-                  required
-                />
-              </label>
+                {error && (
+                  <p className="authError" data-testid="auth-error" role="alert">
+                    {error}
+                  </p>
+                )}
 
-              {error && (
-                <p className="authError" data-testid="auth-error" role="alert">
-                  {error}
-                </p>
-              )}
+                <button
+                  className="loginSubmit"
+                  data-testid="auth-submit"
+                  type="submit"
+                  disabled={busy}
+                >
+                  {busy ? "Working…" : tab === "signin" ? "Sign in" : "Create account"}
+                </button>
 
-              <button
-                className="loginSubmit"
-                data-testid="auth-submit"
-                type="submit"
-                disabled={busy}
-              >
-                {busy ? "Working…" : tab === "signin" ? "Sign in" : "Create account"}
-              </button>
-            </form>
+                {tab === "signin" && (
+                  <button
+                    className="loginGhost"
+                    data-testid="auth-magic"
+                    type="button"
+                    onClick={() => void sendMagicLink()}
+                    disabled={busy}
+                  >
+                    Send me a sign-in link
+                  </button>
+                )}
+              </form>
+            )}
 
             <p className="loginNote">
               {tab === "signup"

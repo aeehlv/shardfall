@@ -52,6 +52,23 @@
   letter-spacing: .2em; text-transform: uppercase; color: #8d8399;
 }
 
+/* ---- matchmaking panel ---- */
+.admMmPanel {
+  width: min(420px, 96vw); margin-top: clamp(16px, 3vh, 26px);
+  border-style: solid; border-color: transparent; border-radius: 0;
+  border-image: url("/ui/panel-frame.png") 150 170 fill stretch;
+  border-width: 30px 34px; padding: 2px 8px 8px;
+  filter: drop-shadow(0 14px 34px rgba(0,0,0,.55));
+}
+.admMmPanel h3 {
+  margin: 0 0 4px; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .62rem; letter-spacing: .22em; text-transform: uppercase; color: var(--gold);
+}
+.admMmHint { margin: 0 0 10px; color: var(--muted); font-style: italic; font-size: .82rem; }
+.admMmRow { display: flex; align-items: center; gap: 14px; }
+.admMmField { flex: 1 1 auto; margin-bottom: 0; }
+.admMmSave { width: auto; min-width: 120px; margin-top: 0; flex: none; }
+
 /* ---- search ---- */
 .admControls {
   display: flex; justify-content: center; width: min(980px, 96vw);
