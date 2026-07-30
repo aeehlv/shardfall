@@ -1,4 +1,4 @@
-import { BASE, launch, newPage, report, sleep } from "./helpers.mjs";
+import { BASE, apiSignUp, launch, newPage, report, sleep } from "./helpers.mjs";
 
 const browser = await launch();
 const { page, errors } = await newPage(browser);
@@ -24,15 +24,9 @@ async function until(fn, ok, ms = 8000) {
   return v;
 }
 
-// --- fresh account ---------------------------------------------------------
-await page.goto(BASE + "/login", { waitUntil: "networkidle0" });
-await page.click('[data-testid="tab-signup"]');
-await sleep(200);
-await page.type('[data-testid="auth-name"]', "WalletTester");
-await page.type('[data-testid="auth-email"]', email);
-await page.type('[data-testid="auth-password"]', "secret123");
-await page.click('[data-testid="auth-submit"]');
-await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
+// --- fresh account (better-auth API — the passwordless UI is covered by 10-auth)
+await apiSignUp(page, { name: "WalletTester", email });
+await page.goto(BASE + "/", { waitUntil: "networkidle0" });
 await sleep(1500);
 for (const sel of ['[data-testid="lore-skip"]', '[data-testid="intro-skip"]']) {
   const el = await page.$(sel);

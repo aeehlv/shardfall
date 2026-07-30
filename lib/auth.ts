@@ -15,7 +15,7 @@ import {
   transactionsCol,
 } from "./server/db";
 import { abandonMatch } from "./server/match";
-import { sendMagicLinkMail } from "./server/mailer";
+import { sendDeleteAccountMail, sendMagicLinkMail } from "./server/mailer";
 
 /** Local dev + LAN origins that must keep working alongside the deployed ones. */
 const LOCAL_ORIGINS = [
@@ -100,6 +100,11 @@ export const auth = betterAuth({
   user: {
     deleteUser: {
       enabled: true,
+      // Deletion is email-confirmed: deleteUser (no password) mails this link;
+      // beforeDelete + the actual delete run only when the link is clicked.
+      sendDeleteAccountVerification: async ({ user, url }) => {
+        await sendDeleteAccountMail({ email: user.email, url });
+      },
       beforeDelete: async (user) => {
         await purgePlayerData(user.id);
       },

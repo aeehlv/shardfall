@@ -1,4 +1,4 @@
-import { BASE, launch, newPage, report, sleep } from "./helpers.mjs";
+import { BASE, apiSignUp, launch, newPage, report, sleep } from "./helpers.mjs";
 
 const browser = await launch();
 const { page, errors } = await newPage(browser);
@@ -12,16 +12,11 @@ await sleep(900);
 // logged-out visitors get the landing page
 checks.push(["landing page for guests", !!(await page.$('[data-testid="landing-cta"]'))]);
 
-// sign in to reach the menu
+// sign in to reach the menu (accounts come from the better-auth API — the
+// passwordless login UI itself is covered by 10-auth)
 const email = `menu${Date.now()}@test.dev`;
-await page.goto(BASE + "/login", { waitUntil: "networkidle0" });
-await page.click('[data-testid="tab-signup"]');
-await sleep(200);
-await page.type('[data-testid="auth-name"]', "MenuTester");
-await page.type('[data-testid="auth-email"]', email);
-await page.type('[data-testid="auth-password"]', "secret123");
-await page.click('[data-testid="auth-submit"]');
-await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
+await apiSignUp(page, { name: "MenuTester", email });
+await page.goto(BASE + "/", { waitUntil: "networkidle0" });
 await sleep(1200);
 
 // new accounts see the lore prologue first, then the short intro

@@ -58,8 +58,10 @@ behind `STUDIO_ENABLED`).
 - Engine: `lib/game/` — pure deterministic TS (types.ts = contract + effect DSL, engine.ts,
   ai.ts, decks.ts, cards-data.ts = the 50-card pool, pool.ts registers it). Never put React or
   IO in the engine. All card effects MUST use the DSL ops in types.ts.
-- Auth: better-auth (`lib/auth.ts`, email+password, mongodbAdapter; client in
-  `lib/auth-client.ts`), login/signup at `/login`. `lib/server/session.ts` resolves the current
+- Auth: passwordless magic-link login (better-auth, `lib/auth.ts`, mongodbAdapter; client in
+  `lib/auth-client.ts`), email-confirmed account deletion; sign-in at `/login`. Email+password
+  stays enabled at the API level (existing credentials, e2e session setup) but has no UI.
+  `lib/server/session.ts` resolves the current
   player from the session; `ensurePlayerForUser` (lib/server/players.ts) links the better-auth
   user to a numeric-`_id` player doc.
 - Data layer: MongoDB via `lib/server/db.ts` — collections: players, matches, match_events,

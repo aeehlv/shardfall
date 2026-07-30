@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { authClient, newPasswordIssue } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 import { usePlayer } from "@/lib/player-context";
 import SiteFooter from "@/components/SiteFooter";
 import "@/app/menu.css";
@@ -76,20 +76,12 @@ export default function AccountPage() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameBusy, setNameBusy] = useState(false);
 
-  // change password
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwDone, setPwDone] = useState(false);
-  const [pwBusy, setPwBusy] = useState(false);
-
   // ledger
   const [txns, setTxns] = useState<Txn[] | null>(null);
   const [txnError, setTxnError] = useState<string | null>(null);
 
-  // delete account
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
+  // delete account — email-confirmed: the mailed link finalizes the deletion
+  const [deleteSent, setDeleteSent] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -134,53 +126,19 @@ export default function AccountPage() {
     }
   };
 
-  const changePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pwBusy) return;
-    setPwError(null);
-    setPwDone(false);
-    const pwIssue = newPasswordIssue(newPassword);
-    if (pwIssue) {
-      setPwError(pwIssue);
-      return;
-    }
-    setPwBusy(true);
-    try {
-      const { error: err } = await authClient.changePassword({
-        currentPassword,
-        newPassword,
-        revokeOtherSessions: true,
-      });
-      if (err) { setPwError(err.message ?? "Password change failed."); return; }
-      setCurrentPassword("");
-      setNewPassword("");
-      setPwDone(true);
-    } finally {
-      setPwBusy(false);
-    }
-  };
-
   const signOut = async () => {
     await authClient.signOut();
     window.location.href = "/";
   };
 
-  const openDelete = () => {
-    setDeletePassword("");
-    setDeleteError(null);
-    setDeleteOpen(true);
-  };
-
-  const deleteAccount = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const requestDelete = async () => {
     if (deleteBusy) return;
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      const { error: err } = await authClient.deleteUser({ password: deletePassword });
-      if (err) { setDeleteError(err.message ?? "Deletion failed — check your password."); return; }
-      await authClient.signOut().catch(() => {});
-      window.location.href = "/";
+      const { error: err } = await authClient.deleteUser({ callbackURL: "/" });
+      if (err) { setDeleteError(err.message ?? "Could not send the confirmation email."); return; }
+      setDeleteSent(true);
     } finally {
       setDeleteBusy(false);
     }
@@ -270,48 +228,6 @@ export default function AccountPage() {
               <span>Member since</span>
               <span className="acctValue">{memberSince}</span>
             </div>
-          </div>
-        </section>
-
-        {/* ---- change password ---- */}
-        <section className="accountSection">
-          <h2>Change Password</h2>
-          <div className="acctPanel">
-            <form className="acctForm" onSubmit={changePassword}>
-              <div className="acctFieldRow">
-                <label className="acctField">
-                  <span>Current password</span>
-                  <input
-                    data-testid="account-pw-current"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    autoComplete="current-password"
-                    required
-                  />
-                </label>
-                <label className="acctField">
-                  <span>New password</span>
-                  <input
-                    data-testid="account-pw-new"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="8+ characters, letters and numbers"
-                    minLength={8}
-                    autoComplete="new-password"
-                    required
-                  />
-                </label>
-              </div>
-              {pwError && <p className="acctError" data-testid="account-pw-error">{pwError}</p>}
-              {pwDone && <p className="acctOk" data-testid="account-pw-done">Password changed — other sessions were signed out.</p>}
-              <div>
-                <button className="acctGold" data-testid="account-pw-save" type="submit" disabled={pwBusy}>
-                  {pwBusy ? "Working…" : "Change password"}
-                </button>
-              </div>
-            </form>
           </div>
         </section>
 
@@ -429,50 +345,33 @@ export default function AccountPage() {
         <section className="accountSection acctDanger" data-testid="account-danger">
           <h2>Danger Zone</h2>
           <div className="acctPanel acctDangerPanel">
-            {!deleteOpen ? (
-              <div className="acctDangerRow">
-                <p>
-                  Delete this account and every trace of it — collection, decks, wallet,
-                  and ledger. This cannot be undone.
-                </p>
-                <button className="acctDangerBtn" data-testid="account-delete" onClick={openDelete}>
-                  Delete account
-                </button>
-              </div>
-            ) : (
-              <form className="acctForm" onSubmit={deleteAccount}>
-                <p className="acctDangerWarn">
-                  Last warning: your duelist will be erased forever. Enter your password to confirm.
-                </p>
-                <div className="acctFieldRow">
-                  <label className="acctField">
-                    <span>Password</span>
-                    <input
-                      data-testid="account-delete-password"
-                      type="password"
-                      value={deletePassword}
-                      onChange={(e) => setDeletePassword(e.target.value)}
-                      autoComplete="current-password"
-                      autoFocus
-                      required
-                    />
-                  </label>
-                </div>
-                {deleteError && <p className="acctError" data-testid="account-delete-error">{deleteError}</p>}
-                <div className="acctDangerActions">
+            {!deleteSent ? (
+              <>
+                <div className="acctDangerRow">
+                  <p>
+                    Delete this account and every trace of it — collection, decks, wallet,
+                    and ledger. We email you a confirmation link first; nothing is erased
+                    until you click it.
+                  </p>
                   <button
-                    className="acctDangerBtn confirm"
-                    data-testid="account-delete-confirm"
-                    type="submit"
+                    className="acctDangerBtn"
+                    data-testid="account-delete"
+                    onClick={() => void requestDelete()}
                     disabled={deleteBusy}
                   >
-                    {deleteBusy ? "Erasing…" : "Erase my account forever"}
-                  </button>
-                  <button className="acctDark" type="button" onClick={() => setDeleteOpen(false)}>
-                    Cancel
+                    {deleteBusy ? "Sending…" : "Delete account"}
                   </button>
                 </div>
-              </form>
+                {deleteError && <p className="acctError" data-testid="account-delete-error">{deleteError}</p>}
+              </>
+            ) : (
+              <div className="acctDangerRow" data-testid="account-delete-sent">
+                <p className="acctDangerWarn">
+                  Confirmation sent to <b>{session.user.email}</b>. Open the email and click
+                  &ldquo;Delete my account&rdquo; to erase your duelist forever — or simply
+                  ignore it and nothing changes.
+                </p>
+              </div>
             )}
           </div>
         </section>

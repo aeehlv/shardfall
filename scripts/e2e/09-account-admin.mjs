@@ -1,37 +1,21 @@
-import { BASE, launch, newPage, report, sleep } from "./helpers.mjs";
+import { BASE, apiSignIn, apiSignUp, deleteAccountToken, launch, newPage, report, sleep } from "./helpers.mjs";
 
 const browser = await launch();
 const { page, errors } = await newPage(browser);
 const checks = [];
-const userEmail = `acct${Date.now()}@test.dev`;
+// the delete-account flow sends REAL mail — the Resend sink address swallows it
+const userEmail = `delivered+acct${Date.now()}@resend.dev`;
 const userName = `AcctTester${String(Date.now()).slice(-5)}`;
+const userPassword = "e2epass123";
 // the allowlisted admin (ADMIN_EMAILS) — created on first run, reused after
 const ADMIN_EMAIL = "apps@etik.lv";
 const ADMIN_PASSWORD = "e2e-warden-9931";
 
-async function signUp(name, email, password) {
-  await page.goto(BASE + "/login", { waitUntil: "networkidle0" });
-  await page.click('[data-testid="tab-signup"]');
-  await sleep(200);
-  await page.type('[data-testid="auth-name"]', name);
-  await page.type('[data-testid="auth-email"]', email);
-  await page.type('[data-testid="auth-password"]', password);
-  await page.click('[data-testid="auth-submit"]');
-  await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
-  await sleep(1500);
+async function skipIntros() {
   for (const sel of ['[data-testid="lore-skip"]', '[data-testid="intro-skip"]']) {
     const el = await page.$(sel);
     if (el) { await el.click(); await sleep(600); }
   }
-}
-
-async function signIn(email, password) {
-  await page.goto(BASE + "/login", { waitUntil: "networkidle0" });
-  await page.type('[data-testid="auth-email"]', email);
-  await page.type('[data-testid="auth-password"]', password);
-  await page.click('[data-testid="auth-submit"]');
-  await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
-  await sleep(1200);
 }
 
 async function signOut() {
@@ -42,9 +26,11 @@ async function signOut() {
 }
 
 // --- fresh user: account page ----------------------------------------------
-await signUp(userName, userEmail, "secret123");
+await apiSignUp(page, { name: userName, email: userEmail, password: userPassword });
 // a demo top-up seeds the ledger so the txn table has a row to show
 await page.goto(BASE + "/", { waitUntil: "networkidle0" });
+await sleep(1200);
+await skipIntros();
 await page.waitForSelector(".moreBtn", { timeout: 10000 }).catch(() => {});
 await page.click(".moreBtn").catch(() => {});
 await sleep(300);
@@ -77,14 +63,15 @@ checks.push(["no admin table for a plain user", !(await page.$('[data-testid="ad
 
 // --- the allowlisted admin --------------------------------------------------
 await signOut();
-await signUp("Warden", ADMIN_EMAIL, ADMIN_PASSWORD);
-// on re-runs the account already exists — fall back to signing in
-const adminSession = await page.evaluate(async () => {
-  const r = await fetch("/api/auth/get-session", { cache: "no-store" });
-  const j = await r.json().catch(() => null);
-  return j?.user?.email ?? null;
-});
-if (adminSession !== ADMIN_EMAIL) await signIn(ADMIN_EMAIL, ADMIN_PASSWORD);
+// created on the first run; on re-runs sign-up answers already-exists → sign in
+try {
+  await apiSignUp(page, { name: "Warden", email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+} catch {
+  await apiSignIn(page, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+}
+await page.goto(BASE + "/", { waitUntil: "networkidle0" });
+await sleep(1000);
+await skipIntros();
 
 await page.goto(BASE + "/admin", { waitUntil: "networkidle0" });
 const adminUp = await page
@@ -123,6 +110,42 @@ if (row) {
 }
 
 await page.screenshot({ path: (process.env.SCRATCH ?? "/tmp") + "/e2e_account_admin.png" });
+
+// --- delete account: passwordless flow ends in an email confirmation --------
+// the fresh throwaway user deletes itself; the admin account must survive re-runs
+await signOut();
+await apiSignIn(page, { email: userEmail, password: userPassword });
+await page.goto(BASE + "/account", { waitUntil: "networkidle0" });
+await page.waitForSelector('[data-testid="account-page"]', { timeout: 12000 }).catch(() => {});
+const delBtn = await page.$('[data-testid="account-delete"]');
+if (delBtn) {
+  const clickedAt = new Date(Date.now() - 10000); // slack for clock drift
+  await delBtn.click();
+  const delSent = await page
+    .waitForSelector('[data-testid="account-delete-sent"]', { timeout: 15000 })
+    .then(() => true).catch(() => false);
+  checks.push(["delete requested → confirmation-sent state", delSent]);
+  // complete the deletion the mailbox-free way: raw token from the
+  // verification collection → the callback URL the mail would have carried
+  const delToken = await deleteAccountToken({ since: clickedAt });
+  checks.push(["delete token stored in the verification collection", !!delToken]);
+  if (delToken) {
+    await page.goto(
+      `${BASE}/api/auth/delete-user/callback?token=${encodeURIComponent(delToken)}&callbackURL=%2F`,
+      { waitUntil: "networkidle0" },
+    );
+    await sleep(800);
+    const sessionAfter = await page.evaluate(async () => {
+      const r = await fetch("/api/auth/get-session", { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      return j?.user?.email ?? null;
+    });
+    checks.push(["account gone after the emailed confirmation", sessionAfter === null, String(sessionAfter)]);
+  }
+} else {
+  console.log("      note: no [data-testid=account-delete] on /account — delete flow not exercised");
+}
+
 await browser.close();
 // expected responses: 403 (the plain-user /admin denial IS the test) and 422
 // (admin signup on re-runs answers already-exists before the sign-in fallback)

@@ -1,19 +1,13 @@
-import { BASE, launch, newPage, report, sleep } from "./helpers.mjs";
+import { BASE, apiSignUp, launch, newPage, report, sleep } from "./helpers.mjs";
 
 const browser = await launch();
 const { page, errors } = await newPage(browser);
 const checks = [];
 const email = `e2e${Date.now()}@test.dev`;
 
-// --- signup ---------------------------------------------------------------
-await page.goto(BASE + "/login", { waitUntil: "networkidle0" });
-await page.click('[data-testid="tab-signup"]');
-await sleep(200);
-await page.type('[data-testid="auth-name"]', "E2EDuelist");
-await page.type('[data-testid="auth-email"]', email);
-await page.type('[data-testid="auth-password"]', "secret123");
-await page.click('[data-testid="auth-submit"]');
-await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
+// --- signup (better-auth API — the passwordless login UI is covered by 10-auth)
+await apiSignUp(page, { name: "E2EDuelist", email });
+await page.goto(BASE + "/", { waitUntil: "networkidle0" });
 await sleep(1600);
 // new accounts land on the lore prologue, then the short intro
 for (const sel of ['[data-testid="lore-skip"]', '[data-testid="intro-skip"]']) {

@@ -1,19 +1,13 @@
-import { BASE, launch, newPage, report, sleep } from "./helpers.mjs";
+import { BASE, apiSignUp, launch, newPage, report, sleep } from "./helpers.mjs";
 
 const browser = await launch();
 const { page, errors } = await newPage(browser);
 const checks = [];
 const email = `camp${Date.now()}@test.dev`;
 
-// fresh account
-await page.goto(BASE + "/login", { waitUntil: "networkidle0" });
-await page.click('[data-testid="tab-signup"]');
-await sleep(200);
-await page.type('[data-testid="auth-name"]', "CampTester");
-await page.type('[data-testid="auth-email"]', email);
-await page.type('[data-testid="auth-password"]', "secret123");
-await page.click('[data-testid="auth-submit"]');
-await page.waitForNavigation({ waitUntil: "networkidle0", timeout: 20000 }).catch(() => {});
+// fresh account (better-auth API — the passwordless login UI is covered by 10-auth)
+await apiSignUp(page, { name: "CampTester", email });
+await page.goto(BASE + "/", { waitUntil: "networkidle0" });
 await sleep(1500);
 const loreSkip = await page.$('[data-testid="lore-skip"]');
 if (loreSkip) { await loreSkip.click(); await sleep(600); }
