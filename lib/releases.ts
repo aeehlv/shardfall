@@ -10,7 +10,7 @@
  *  were reconstructed from git history when versioning began.
  */
 
-export const GAME_VERSION = "0.2.0-alpha";
+export const GAME_VERSION = "0.2.1-alpha";
 
 export type ChangeKind = "Added" | "Changed" | "Fixed";
 
@@ -25,6 +25,27 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "0.2.1-alpha",
+    releasedAt: "2026-07-30 18:42",
+    title: "Sign-in links deliver again",
+    summary: "Magic-link emails were not reaching players on the live site — they are now.",
+    sections: [
+      {
+        kind: "Fixed",
+        items: [
+          "Sign-in links now arrive: the live site was accepting sign-in requests without actually sending the email, so nobody could get in. Mail delivery is live and verified from the shardfall.app domain.",
+          "Account-deletion confirmation emails are delivered through the same channel.",
+        ],
+      },
+      {
+        kind: "Changed",
+        items: [
+          "Demo top-ups are switched on for the live site, capped per day per account.",
+        ],
+      },
+    ],
+  },
   {
     version: "0.2.0-alpha",
     releasedAt: "2026-07-30 15:53",
