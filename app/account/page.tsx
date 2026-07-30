@@ -12,12 +12,15 @@ import "./account.css";
 
 /** Mirrors a ledger row of GET /api/me/transactions. */
 interface Txn {
+  id?: string;
   ts: number;
   kind: string;
   currency: "gold" | "shards" | null;
   amount: number;
   itemId?: string;
   balanceAfter?: number;
+  label?: string;
+  invoiceNo?: string;
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -304,14 +307,15 @@ export default function AccountPage() {
                       <th>Type</th>
                       <th>Item</th>
                       <th style={{ textAlign: "right" }}>Amount</th>
+                      <th>Invoice</th>
                     </tr>
                   </thead>
                   <tbody>
                     {txns.map((t, i) => (
-                      <tr key={`${t.ts}-${i}`}>
+                      <tr key={t.id ?? `${t.ts}-${i}`}>
                         <td className="txnThumbCell"><TxnThumb txn={t} /></td>
                         <td className="txnDate">{new Date(t.ts).toLocaleString()}</td>
-                        <td className="txnKind">{kindLabel(t.kind)}</td>
+                        <td className="txnKind">{t.label ?? kindLabel(t.kind)}</td>
                         <td className="txnItem">{t.itemId ?? "—"}</td>
                         <td className={`txnAmount ${t.currency === null || t.amount === 0 ? "txnZero" : t.amount > 0 ? "txnPlus" : "txnMinus"}`}>
                           {t.currency === null ? (
@@ -324,6 +328,19 @@ export default function AccountPage() {
                                 alt={t.currency}
                               />
                             </>
+                          )}
+                        </td>
+                        <td className="txnInvoice">
+                          {t.id ? (
+                            <a
+                              href={`/api/me/invoices/${t.id}?download=1`}
+                              data-testid={`txn-invoice-${t.id}`}
+                              title="Download invoice"
+                            >
+                              {t.invoiceNo ?? "invoice"} ↓
+                            </a>
+                          ) : (
+                            "—"
                           )}
                         </td>
                       </tr>

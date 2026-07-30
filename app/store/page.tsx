@@ -14,7 +14,7 @@ import {
   DAY_MS, getDaily, getUpcoming, getWeekly, type PricedCard,
 } from "@/lib/game/rotation";
 import {
-  FEATURED_IDS, MAX_COPIES, ROTATION_MAX, TOPUP_TIERS, singlePrice,
+  FEATURED_IDS, MAX_COPIES, ROTATION_MAX, defaultCatalog, type StoreCatalog,
 } from "@/lib/game/store-pricing";
 import { CurrencyHint, usePlayer } from "@/lib/player-context";
 import FramedCard from "@/components/play/FramedCard";
@@ -31,6 +31,9 @@ const RARITY_GLOW: Record<Rarity, string> = {
 const FEATURED: GameCard[] = FEATURED_IDS
   .map((id) => CARD_POOL.find((c) => c.id === id))
   .filter((c): c is GameCard => Boolean(c));
+
+/** Pack art stays client-side — the catalog carries prices, not images. */
+const PACK_ART: Record<string, string> = Object.fromEntries(PACKS.map((p) => [p.id, p.art]));
 
 const fmtCountdown = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -51,6 +54,8 @@ export default function StorePage() {
   const [denied, setDenied] = useState<{ key: string; msg: string } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [freeClaimedDay, setFreeClaimedDay] = useState<string | null>(null);
+  // Effective prices (admin-adjustable) — hardcoded defaults until the catalog loads.
+  const [catalog, setCatalog] = useState<StoreCatalog>(defaultCatalog);
   const denyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // SSR-safe rotation clock: null until mounted, then ticks every second.
@@ -65,6 +70,20 @@ export default function StorePage() {
     setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  // Server-managed prices — guests charge these too, so both paths match.
+  useEffect(() => {
+    let live = true;
+    fetch("/api/store/catalog", { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<StoreCatalog>) : null))
+      .then((j) => {
+        if (live && j && Array.isArray(j.packs) && j.singles && Array.isArray(j.topups)) {
+          setCatalog(j);
+        }
+      })
+      .catch(() => {});
+    return () => { live = false; };
   }, []);
 
   // Deterministic rotations — cheap to derive each tick, flip exactly at UTC boundaries.
@@ -136,7 +155,7 @@ export default function StorePage() {
     return j;
   };
 
-  const buyPack = (pack: (typeof PACKS)[number]) => withPending(`pack-${pack.id}`, async () => {
+  const buyPack = (pack: StoreCatalog["packs"][number]) => withPending(`pack-${pack.id}`, async () => {
     if (signedIn) {
       const j = await serverBuy(`pack-${pack.id}`, { kind: "pack", size: pack.id });
       if (j) revealPack(pack.name, j.cards ?? []);
@@ -160,7 +179,7 @@ export default function StorePage() {
       return;
     }
     if (!profile) return;
-    const price = singlePrice(card.rarity);
+    const price = catalog.singles[card.rarity];
     if (profile.shards < price) { deny(`single-${card.id}`, "Not enough shards"); return; }
     const p = clone(profile);
     p.shards -= price;
@@ -445,12 +464,12 @@ export default function StorePage() {
           <section className="storeSection">
             <h2>Card Packs</h2>
             <div className="packGrid">
-              {PACKS.map((pack) => {
+              {catalog.packs.map((pack) => {
                 const key = `pack-${pack.id}`;
                 const isDenied = denied?.key === key;
                 return (
                   <div className="packCard" key={pack.id}>
-                    <div className="packArt"><img src={pack.art} alt="" /></div>
+                    <div className="packArt"><img src={PACK_ART[pack.id] ?? ""} alt="" /></div>
                     <div className="packBody">
                       <b className="packName">{pack.name}</b>
                       <span className="packMeta">{pack.cards} cards · rarity odds apply</span>
@@ -495,7 +514,7 @@ export default function StorePage() {
                     <span className="ownedTag">Owned {copies}/{max}</span>
                     <div className="priceRow">
                       <img src="/ui/shard.png" alt="shards" />
-                      <span>{singlePrice(card.rarity)}</span>
+                      <span>{catalog.singles[card.rarity]}</span>
                     </div>
                     <button
                       className={`buyBtn${isDenied ? " shake" : ""}`}
@@ -516,14 +535,14 @@ export default function StorePage() {
           <section className="storeSection">
             <h2>Aethershards</h2>
             <div className="topupRow">
-              {TOPUP_TIERS.map((t) => {
+              {catalog.topups.map((t) => {
                 const isDenied = denied?.key === `topup-${t.shards}`;
                 return (
-                  <div className={`topupCard${"best" in t && t.best ? " topupBest" : ""}`} key={t.shards}>
-                    {"best" in t && t.best && <span className="topupFlag">Best value</span>}
+                  <div className={`topupCard${t.best ? " topupBest" : ""}`} key={t.shards}>
+                    {t.best && <span className="topupFlag">Best value</span>}
                     <img className="topupIcon" src="/ui/shard.png" alt="" />
                     <b className="topupAmount">+{t.shards} Shards</b>
-                    {"label" in t && t.label && <span className="topupLabel">{t.label}</span>}
+                    {t.label && <span className="topupLabel">{t.label}</span>}
                     <span className="topupPrice"><s>{t.price}</s><i className="topupFuture">future price</i></span>
                     <button
                       className={`buyBtn${isDenied ? " shake" : ""}`}

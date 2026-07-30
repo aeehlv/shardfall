@@ -186,6 +186,9 @@
   border: 1px solid rgba(227,164,74,.35); box-shadow: 0 2px 8px rgba(0,0,0,.55);
 }
 .txnThumb.coin { width: 26px; height: 26px; }
+.txnInvoice { font-family: var(--font-mono, monospace); font-size: .74rem; }
+.txnInvoice a { color: var(--muted); text-decoration: none; letter-spacing: .04em; }
+.txnInvoice a:hover { color: var(--gold); text-decoration: underline; }
 .txnTable .txnPlus { color: #8cc152; }
 .txnTable .txnMinus { color: #e0562f; }
 .txnTable .txnZero { color: var(--muted); font-weight: 400; }

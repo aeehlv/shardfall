@@ -10,17 +10,19 @@ export async function GET(req: Request) {
   const limit = Math.min(
     200, Math.max(1, Number(new URL(req.url).searchParams.get("limit")) || 50),
   );
-  const transactions = await (await transactionsCol())
+  const docs = await (await transactionsCol())
     .find(
       { playerId: String(player.id) },
       {
         sort: { ts: -1 }, limit,
         // Whitelist: meta can hold internals (e.g. admin identity on grants).
         projection: {
-          _id: 0, ts: 1, kind: 1, currency: 1, amount: 1, itemId: 1, balanceAfter: 1,
+          ts: 1, kind: 1, currency: 1, amount: 1, itemId: 1, balanceAfter: 1,
+          label: 1, invoiceNo: 1,
         },
       },
     )
     .toArray();
+  const transactions = docs.map(({ _id, ...rest }) => ({ id: String(_id), ...rest }));
   return NextResponse.json({ transactions });
 }

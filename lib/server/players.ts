@@ -1,6 +1,6 @@
 import type { Filter } from "mongodb";
 import {
-  leagueFor, nextPlayerId, playersCol, transactionsCol, type PlayerDoc,
+  leagueFor, nextInvoiceNo, nextPlayerId, playersCol, transactionsCol, type PlayerDoc,
 } from "./db";
 import { CARD_POOL } from "@/lib/game/pool";
 import { buildStarterDeck, starterDeckName } from "@/lib/game/decks";
@@ -180,10 +180,12 @@ export async function claimDailyCounter(
 export interface WalletTxn {
   kind: string;
   itemId?: string;
+  label?: string;
   meta?: Record<string, unknown>;
 }
 
-/** Low-level ledger insert — every economy mutation leaves exactly one row. */
+/** Low-level ledger insert — every economy mutation leaves exactly one row.
+ *  Each row gets the next sequential invoice number ("SF-000001"). */
 export async function logTxn(
   playerId: number | string,
   txn: {
@@ -192,10 +194,13 @@ export async function logTxn(
     amount: number;
     itemId?: string;
     balanceAfter?: number;
+    label?: string;
     meta?: Record<string, unknown>;
   },
 ): Promise<void> {
-  await (await transactionsCol()).insertOne({ playerId: String(playerId), ts: Date.now(), ...txn });
+  await (await transactionsCol()).insertOne({
+    playerId: String(playerId), ts: Date.now(), invoiceNo: await nextInvoiceNo(), ...txn,
+  });
 }
 
 /** Atomic wallet credit ($inc) + ledger row. Returns the fresh player document. */
@@ -219,6 +224,7 @@ export async function creditWallet(
     amount: delta.gold ?? delta.shards ?? 0,
     itemId: txn.itemId,
     balanceAfter: currency === "gold" ? doc.gold : currency === "shards" ? doc.shards : undefined,
+    label: txn.label,
     meta: delta.gold && delta.shards ? { ...txn.meta, shards: delta.shards } : txn.meta,
   });
   return doc;
@@ -254,6 +260,7 @@ export async function debitWallet(
     amount: -(cost.gold ?? cost.shards ?? 0),
     itemId: txn.itemId,
     balanceAfter: currency === "gold" ? doc.gold : currency === "shards" ? doc.shards : undefined,
+    label: txn.label,
     meta: cost.gold && cost.shards ? { ...txn.meta, shards: -cost.shards } : txn.meta,
   });
   return doc;

@@ -57,6 +57,10 @@ export interface TransactionDoc {
   amount: number;
   itemId?: string;
   balanceAfter?: number;
+  /** client-facing purchase name (e.g. store item title, admin grant reason) */
+  label?: string;
+  /** sequential "SF-000001" — set on every new row; legacy rows lack it */
+  invoiceNo?: string;
   meta?: Record<string, unknown>;
 }
 
@@ -352,6 +356,18 @@ export async function reservePlayerIds(count: number): Promise<number> {
 /** Next sequential player id (always >= 2 — id 1 is the system campaign bot). */
 export async function nextPlayerId(): Promise<number> {
   return reservePlayerIds(1);
+}
+
+const INVOICE_COUNTER = "invoices";
+
+/** Next sequential invoice number, formatted "SF-000001". */
+export async function nextInvoiceNo(): Promise<string> {
+  const doc = await (await countersCol()).findOneAndUpdate(
+    { _id: INVOICE_COUNTER },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: "after" },
+  );
+  return `SF-${String(doc?.seq ?? 1).padStart(6, "0")}`;
 }
 
 // -------------------------------------------------------------------- ladder --

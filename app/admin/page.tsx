@@ -6,6 +6,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import AccountsPanel from "@/components/admin/AccountsPanel";
+import PricingPanel from "@/components/admin/PricingPanel";
 import "@/app/menu.css";
 import "./admin.css";
 
@@ -18,11 +20,11 @@ type Stats = {
 type AdminPlayer = {
   id: number; name: string; email: string | null; level: number; league: string;
   rating: number; gold: number; shards: number; wins: number; losses: number;
-  createdAt?: number;
+  createdAt?: number; verified?: boolean;
 };
 type Txn = {
-  ts: number; kind: string; currency: "gold" | "shards" | null; amount: number;
-  itemId?: string; balanceAfter?: number;
+  id: string; ts: number; kind: string; currency: "gold" | "shards" | null; amount: number;
+  itemId?: string; balanceAfter?: number; label?: string; invoiceNo?: string;
 };
 
 const fmt = (n: number) => n.toLocaleString("en-US");
@@ -36,7 +38,19 @@ function TxnLine({ txn }: { txn: Txn }) {
   return (
     <li className="admTxn">
       <span className="admTxnWhen">{fmtWhen(txn.ts)}</span>
-      <span className="admTxnKind">{txn.kind}{txn.itemId ? ` · ${txn.itemId}` : ""}</span>
+      <span className="admTxnKind" title={txn.label ? txn.kind : undefined}>
+        {txn.label ?? txn.kind}{txn.itemId ? ` · ${txn.itemId}` : ""}
+      </span>
+      {txn.invoiceNo && (
+        <a
+          className="admTxnInvoice"
+          href={`/api/admin/invoices/${txn.id}?download=1`}
+          title="Download invoice"
+          data-testid={`admin-invoice-${txn.id}`}
+        >
+          {txn.invoiceNo}
+        </a>
+      )}
       <span className={`admTxnAmt${txn.amount < 0 ? " neg" : ""}`}>
         {txn.currency ? `${signed} ${txn.currency}` : "—"}
       </span>
@@ -46,15 +60,17 @@ function TxnLine({ txn }: { txn: Txn }) {
 
 /** Expanded drawer under a player row: recent ledger + grant controls. */
 function PlayerDrawer({
-  player, onGranted,
+  player, onGranted, onVerified,
 }: {
   player: AdminPlayer;
   onGranted: (wallet: { gold: number; shards: number }) => void;
+  onVerified: () => void;
 }) {
   const [txns, setTxns] = useState<Txn[] | null>(null);
   const [txnsFailed, setTxnsFailed] = useState(false);
   const [gold, setGold] = useState("");
   const [shards, setShards] = useState("");
+  const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -89,18 +105,42 @@ function PlayerDrawer({
       const res = await fetch("/api/admin/grant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId: player.id, gold: g, shards: s }),
+        body: JSON.stringify({
+          playerId: player.id, gold: g, shards: s,
+          ...(label.trim() ? { label: label.trim() } : {}),
+        }),
       });
       const json = (await res.json()) as { wallet?: { gold: number; shards: number }; error?: string };
       if (!res.ok || !json.wallet) throw new Error(json.error || `status ${res.status}`);
       onGranted(json.wallet);
       setGold("");
       setShards("");
+      setLabel("");
       setNote({ ok: true, text: "Granted." });
       setTxns(null);
       setReloadKey((k) => k + 1);
     } catch (err) {
       setNote({ ok: false, text: err instanceof Error ? err.message : "Grant failed." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch("/api/admin/accounts/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: player.id }),
+      });
+      const json = (await res.json()) as { verified?: boolean; error?: string };
+      if (!res.ok || !json.verified) throw new Error(json.error || `status ${res.status}`);
+      onVerified();
+      setNote({ ok: true, text: "Email verified." });
+    } catch (err) {
+      setNote({ ok: false, text: err instanceof Error ? err.message : "Verify failed." });
     } finally {
       setBusy(false);
     }
@@ -140,6 +180,15 @@ function PlayerDrawer({
             onChange={(e) => setShards(e.target.value)}
           />
         </label>
+        <label className="admGrantField admLabelField">
+          <span>Shown as</span>
+          <input
+            type="text" maxLength={60} value={label}
+            placeholder="Purchase name (optional)"
+            data-testid={`admin-grant-label-${player.id}`}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </label>
         <button
           className="admGrantBtn" disabled={busy}
           data-testid={`admin-grant-btn-${player.id}`}
@@ -147,6 +196,15 @@ function PlayerDrawer({
         >
           {busy ? "Granting…" : "Grant"}
         </button>
+        {player.email && !player.verified && (
+          <button
+            className="admVerifyBtn" disabled={busy}
+            data-testid={`admin-verify-${player.id}`}
+            onClick={() => void verify()}
+          >
+            Verify email
+          </button>
+        )}
         {note && (
           <p className={`admGrantNote${note.ok ? " ok" : ""}`}>{note.text}</p>
         )}
@@ -304,6 +362,7 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [playersReload, setPlayersReload] = useState(0);
   const qRef = useRef("");
 
   // debounce the search box (~300ms)
@@ -358,7 +417,7 @@ export default function AdminPage() {
       }
     })();
     return () => ctrl.abort();
-  }, [q, denied]);
+  }, [q, denied, playersReload]);
 
   if (denied) {
     return (
@@ -441,6 +500,8 @@ export default function AdminPage() {
       {/* eslint-enable @next/next/no-img-element */}
 
       <MatchmakingPanel />
+      <PricingPanel />
+      <AccountsPanel onCreated={() => setPlayersReload((k) => k + 1)} />
 
       <div className="admControls">
         <label className="admSearch">
@@ -481,7 +542,17 @@ export default function AdminPage() {
                 >
                   <td className="cId">{p.id}</td>
                   <td className="cName">{p.name}</td>
-                  <td className="cEmail">{p.email ?? <span className="admNull">—</span>}</td>
+                  <td className="cEmail">
+                    {p.email ?? <span className="admNull">—</span>}
+                    {p.email && (
+                      <span
+                        className={`admVerifiedMark${p.verified ? "" : " un"}`}
+                        title={p.verified ? "Email verified" : "Email not verified"}
+                      >
+                        {p.verified ? "✓" : "○"}
+                      </span>
+                    )}
+                  </td>
                   <td className="cNum">{p.level}</td>
                   <td className="cLeague">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -498,6 +569,8 @@ export default function AdminPage() {
                       <PlayerDrawer
                         player={p}
                         onGranted={(wallet) => applyWallet(p.id, wallet)}
+                        onVerified={() => setPlayers((prev) =>
+                          prev?.map((r) => (r.id === p.id ? { ...r, verified: true } : r)) ?? prev)}
                       />
                     </td>
                   </tr>

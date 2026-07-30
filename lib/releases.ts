@@ -10,7 +10,7 @@
  *  were reconstructed from git history when versioning began.
  */
 
-export const GAME_VERSION = "0.1.1-alpha";
+export const GAME_VERSION = "0.2.0-alpha";
 
 export type ChangeKind = "Added" | "Changed" | "Fixed";
 
@@ -25,6 +25,30 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "0.2.0-alpha",
+    releasedAt: "2026-07-30 15:53",
+    title: "Purchases, invoices and account tools",
+    summary: "The commerce loop becomes real: named purchases, numbered invoices, managed prices, manual accounts.",
+    sections: [
+      {
+        kind: "Added",
+        items: [
+          "Every transaction now carries a sequential invoice number (SF-000001); existing history was numbered retroactively.",
+          "Downloadable invoices for every purchase — from the client's account page and from the admin panel.",
+          "Admin grants can carry a purchase name: the client sees it as a regular purchase in their history, not a technical grant.",
+          "Store prices are managed from the admin panel — packs, featured singles and top-up tiers, with live effect and one-click reset to defaults.",
+          "Admins can create client accounts manually (active immediately, sign-in by magic link) and verify existing accounts; verified status is visible in the player table.",
+        ],
+      },
+      {
+        kind: "Changed",
+        items: [
+          "Email verification at registration is inherent to magic-link sign-in — every self-registered account is email-verified by construction.",
+        ],
+      },
+    ],
+  },
   {
     version: "0.1.1-alpha",
     releasedAt: "2026-07-30 14:52",

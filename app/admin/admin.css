@@ -200,6 +200,69 @@
 .admGrantNote { margin: 8px 0 0; font-size: .8rem; font-style: italic; color: #e07a6a; }
 .admGrantNote.ok { color: #9fd06c; }
 
+/* ---- invoices / labels / verification ---- */
+.admTxnInvoice {
+  flex: 0 0 auto; font-family: var(--font-mono, monospace); font-size: .72rem;
+  color: var(--gold); text-decoration: none; letter-spacing: .04em;
+  border-bottom: 1px dotted rgba(227,164,74,.5);
+}
+.admTxnInvoice:hover { color: #ffd98a; border-bottom-color: #ffd98a; }
+.admLabelField input { width: 100%; max-width: 170px; text-align: left; }
+.admVerifyBtn {
+  width: 100%; margin-top: 8px;
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 14px; color: var(--muted); cursor: pointer; font-size: .8rem;
+  font-family: var(--font-display), Georgia, serif; letter-spacing: .06em;
+  transition: color .15s ease, border-color .15s ease;
+}
+.admVerifyBtn:hover:not(:disabled) { color: #9fd06c; border-color: rgba(159,208,108,.5); }
+.admVerifiedMark { margin-left: 7px; color: #9fd06c; font-size: .78rem; }
+.admVerifiedMark.un { color: #8d8399; }
+
+/* ---- create account ---- */
+.admAccounts { padding: 6px 18px 14px; }
+.admAccounts h3 {
+  margin: 0 0 4px; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .62rem; letter-spacing: .22em; text-transform: uppercase; color: var(--gold);
+}
+.admAccountsRow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
+.admAccountsField { flex: 1 1 240px; margin-bottom: 0; }
+.admAccountsField input { width: 100%; max-width: 240px; text-align: left; }
+.admAccountsCheck {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-family: var(--font-display), Georgia, serif; font-weight: 700; font-size: .7rem;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+.admAccountsCheck input { accent-color: #e3a44a; width: 15px; height: 15px; }
+.admAccountsBtn { width: auto; min-width: 140px; margin-top: 0; }
+
+/* ---- store price editor ---- */
+.admPricing { padding: 6px 18px 14px; }
+.admPricing h3 {
+  margin: 0 0 4px; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .62rem; letter-spacing: .22em; text-transform: uppercase; color: var(--gold);
+}
+.admPricingCols { display: flex; flex-wrap: wrap; gap: 10px 34px; }
+.admPricingCol { flex: 1 1 200px; min-width: 180px; }
+.admPricingCol h4 {
+  margin: 8px 0 8px; font-family: var(--font-display), Georgia, serif; font-weight: 700;
+  font-size: .58rem; letter-spacing: .18em; text-transform: uppercase; color: #8d8399;
+}
+.admPriceField span { text-transform: none; letter-spacing: .04em; }
+.admPriceDot {
+  display: inline-block; width: 6px; height: 6px; margin-left: 7px; border-radius: 50%;
+  background: var(--gold); box-shadow: 0 0 6px rgba(227,164,74,.8); vertical-align: 2px;
+}
+.admPricingActions { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.admPricingSave { width: auto; min-width: 160px; }
+.admPricingReset {
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 16px; color: var(--muted); cursor: pointer; font-size: .8rem;
+  font-family: var(--font-display), Georgia, serif; letter-spacing: .06em;
+  transition: color .15s ease, border-color .15s ease;
+}
+.admPricingReset:hover:not(:disabled) { color: #e07a6a; border-color: rgba(224,86,47,.5); }
+
 /* ---- Releases toggle (generated gold button, top right) ---- */
 .admReleasesBtn {
   position: fixed; top: 14px; right: 18px; z-index: 30; cursor: pointer;

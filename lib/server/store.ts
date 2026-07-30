@@ -10,8 +10,9 @@ import { DAY_MS, EPOCH_START, getDaily, getWeekly, type PricedCard } from "@/lib
 import { getHotDeals } from "@/lib/game/hotdeals";
 import { CARD_POOL } from "@/lib/game/pool";
 import {
-  FEATURED_IDS, MAX_COPIES, ROTATION_MAX, singlePrice, TOPUP_TIERS,
+  FEATURED_IDS, MAX_COPIES, ROTATION_MAX, TOPUP_TIERS,
 } from "@/lib/game/store-pricing";
+import { getEffectivePricing } from "./pricing";
 
 /** Purchase failure the API layer maps onto a response: 400 invalid, 409 denied. */
 export class StoreError extends Error {
@@ -98,8 +99,10 @@ async function denialReason(
 export async function buyPack(playerId: number, size: string): Promise<StoreResult> {
   const pack = PACKS.find((p) => p.id === size);
   if (!pack) throw new StoreError("Unknown pack", 400);
+  const pricing = await getEffectivePricing();
+  const gold = pricing.packs.find((p) => p.id === pack.id)?.gold ?? pack.gold;
   const cards = rollPack(CARD_POOL, pack.cards);
-  const doc = await debitWallet(playerId, { gold: pack.gold }, {
+  const doc = await debitWallet(playerId, { gold }, {
     kind: "pack_purchase", itemId: pack.id, meta: { cards },
   });
   if (!doc) throw new StoreError("Not enough gold", 409);
@@ -113,8 +116,9 @@ export async function buySingle(playerId: number, cardId: string): Promise<Store
   const card = CARD_POOL.find((c) => c.id === cardId);
   if (!card) throw new StoreError("Unknown card", 400);
   const cap = MAX_COPIES(card.rarity);
+  const pricing = await getEffectivePricing();
   const doc = await buyCardAtomic(
-    playerId, { shards: singlePrice(card.rarity) }, cardId, cap, { kind: "single_purchase" },
+    playerId, { shards: pricing.singles[card.rarity] }, cardId, cap, { kind: "single_purchase" },
   );
   if (!doc) throw await denialReason(playerId, cardId, cap, "shards");
   return { wallet: wallet(doc), cards: [cardId] };
