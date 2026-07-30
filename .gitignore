@@ -49,3 +49,6 @@ next-env.d.ts
 # generated art history (large; regenerate via scripts)
 /library/art/history/
 .claude/
+
+# external review correspondence
+/review_*.md
