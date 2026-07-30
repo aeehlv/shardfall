@@ -1,8 +1,9 @@
 /** Bot display names for the seeded ladder — a mix of handle styles so no
  *  single template dominates: spaced two-word handles ("Regime Eraser"),
- *  camel compounds, lowercase tags, plain `playerNNNNNNNN`, first names with
- *  digits, and the occasional leet/underscore relic. Pure module: callers
- *  pass their own RNG so seeds stay reproducible. */
+ *  camel compounds, lowercase tags, first names with digits, and the
+ *  occasional leet/underscore relic. Anonymous `playerNNNNNNNN` handles are
+ *  deliberately excluded — they read as placeholder accounts. Pure module:
+ *  callers pass their own RNG so seeds stay reproducible. */
 
 const WORD_A = [
   "Regime", "Silent", "Iron", "Crimson", "Hollow", "Broken", "Savage", "Lunar", "Static", "Feral",
@@ -43,31 +44,27 @@ function digits(rand: () => number, min: number, max: number): string {
 /** One name in one of several styles; may collide — see uniqueBotName. */
 export function rollBotName(rand: () => number): string {
   const roll = rand();
-  if (roll < 0.3) {
-    // plain anonymous default, common on real ladders
-    return `player${digits(rand, 10_000_000, 99_999_999)}`;
-  }
-  if (roll < 0.5) {
+  if (roll < 0.29) {
     // spaced two-word handle: "Regime Eraser"
     return `${pick(rand, WORD_A)} ${pick(rand, WORD_B)}`;
   }
-  if (roll < 0.62) {
+  if (roll < 0.46) {
     // camel compound, sometimes numbered: "ShadowGambit7"
     return `${pick(rand, WORD_A)}${pick(rand, WORD_B)}${rand() < 0.4 ? digits(rand, 1, 99) : ""}`;
   }
-  if (roll < 0.74) {
+  if (roll < 0.63) {
     // lowercase tag: "coldmercy92", "vortex_hex"
     const a = pick(rand, LOWER);
     if (rand() < 0.35) return `${a}_${pick(rand, LOWER)}`;
     return `${a}${rand() < 0.6 ? digits(rand, 2, 999) : ""}`;
   }
-  if (roll < 0.86) {
+  if (roll < 0.8) {
     // first name + year/number: "Denis2003", "Marta_99"
     const n = pick(rand, FIRST);
     if (rand() < 0.4) return `${n}${digits(rand, 1990, 2012)}`;
     return `${n}_${digits(rand, 1, 99)}`;
   }
-  if (roll < 0.94) {
+  if (roll < 0.92) {
     // single word, capitalized or not: "Requiem", "saber"
     const w = rand() < 0.5 ? pick(rand, WORD_B) : pick(rand, LOWER);
     return rand() < 0.3 ? `${w}${digits(rand, 1, 999)}` : w;
@@ -89,7 +86,7 @@ export function uniqueBotName(rand: () => number, used: Set<string>): string {
       return name;
     }
   }
-  const fallback = `player${digits(rand, 10_000_000, 99_999_999)}`;
+  const fallback = `${pick(rand, LOWER)}_${pick(rand, LOWER)}${digits(rand, 1000, 999_999)}`.slice(0, 24);
   used.add(fallback);
   return fallback;
 }

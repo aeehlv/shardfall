@@ -23,7 +23,8 @@ function mulberry(seed: number) {
 
 async function main() {
   const players = await playersCol();
-  const rand = mulberry(20260730);
+  const rand = mulberry(2026073014); // second pass: purge the playerNNNNNNNN style
+
   const used = new Set<string>();
 
   // Reserve every human name so a bot can't collide with a real player.

@@ -46,6 +46,7 @@ export default function StorePage() {
   const { signedIn, sessionLoading, player, refresh, error } = usePlayer();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [opening, setOpening] = useState<Opening | null>(null);
+  const [preview, setPreview] = useState<GameCard | null>(null);
   const [flipped, setFlipped] = useState<boolean[]>([]);
   const [denied, setDenied] = useState<{ key: string; msg: string } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -237,6 +238,27 @@ export default function StorePage() {
   const flipOne = (i: number) =>
     setFlipped((f) => f.map((v, j) => (j === i ? true : v)));
 
+  // Escape closes the card preview
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPreview(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [preview]);
+
+  /** Every store card is pressable — opens the full-size framed preview. */
+  const pressableCard = (card: GameCard) => (
+    <button
+      type="button"
+      className="cardPress"
+      aria-label={`Preview ${card.name}`}
+      data-testid={`preview-${card.id}`}
+      onClick={() => setPreview(card)}
+    >
+      <FramedCard card={card} />
+    </button>
+  );
+
   /* eslint-disable @next/next/no-img-element */
   return (
     <main className="storeMain">
@@ -292,7 +314,7 @@ export default function StorePage() {
                       style={{ "--rar": RARITY_GLOW[card.rarity] } as CSSProperties}
                     >
                       <span className="discountTag">-{pc.discountPct}%</span>
-                      <FramedCard card={card} />
+                      {pressableCard(card)}
                       <span className="singleRarity">{card.rarity}</span>
                       <span className="ownedTag">Owned {copies}/{max}</span>
                       <div className="priceRow">
@@ -318,7 +340,7 @@ export default function StorePage() {
                   style={{ "--rar": "#45c4b8" } as CSSProperties}
                 >
                   <span className="discountTag freeTag">Free</span>
-                  <FramedCard card={daily.freeCard} />
+                  {pressableCard(daily.freeCard)}
                   <span className="singleRarity">daily gift</span>
                   <span className="ownedTag">
                     Owned {owned(daily.freeCard.id)}
@@ -372,7 +394,7 @@ export default function StorePage() {
                       {pc.discountPct > 0 && (
                         <span className="discountTag">-{pc.discountPct}%</span>
                       )}
-                      <FramedCard card={card} />
+                      {pressableCard(card)}
                       <span className="singleRarity">{card.rarity}</span>
                       <span className="ownedTag">Owned {copies}/{max}</span>
                       <div className="priceRow">
@@ -468,7 +490,7 @@ export default function StorePage() {
                     key={card.id}
                     style={{ "--rar": RARITY_GLOW[card.rarity] } as CSSProperties}
                   >
-                    <FramedCard card={card} />
+                    {pressableCard(card)}
                     <span className="singleRarity">{card.rarity}</span>
                     <span className="ownedTag">Owned {copies}/{max}</span>
                     <div className="priceRow">
@@ -519,6 +541,29 @@ export default function StorePage() {
             <p className="topupNote">Payments arrive with the online release — for now these grant shards instantly.</p>
           </section>
         </>
+      )}
+
+      {/* ---- full-size card preview ---- */}
+      {preview && (
+        <div className="cardPreview" data-testid="card-preview" onClick={() => setPreview(null)}>
+          <div className="cardPreviewCard" onClick={(e) => e.stopPropagation()}>
+            <FramedCard card={preview} />
+            <span
+              className="singleRarity"
+              style={{ "--rar": RARITY_GLOW[preview.rarity] } as CSSProperties}
+            >
+              {preview.rarity}
+            </span>
+          </div>
+          <button
+            className="cardPreviewClose"
+            data-testid="card-preview-close"
+            aria-label="Close preview"
+            onClick={() => setPreview(null)}
+          >
+            ✕
+          </button>
+        </div>
       )}
 
       {/* ---- pack opening overlay ---- */}

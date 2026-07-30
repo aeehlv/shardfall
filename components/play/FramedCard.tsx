@@ -4,14 +4,42 @@
 
 import { FRAMES, RULES_BOX, frameSrcFor } from "@/lib/frames";
 import type { GameCard } from "@/lib/game/types";
-import type { CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import "@/app/cards.css";
 
 const rect = (box: readonly [number, number, number, number]): CSSProperties => ({
   left: `${box[0]}%`, top: `${box[1]}%`, width: `${box[2]}%`, height: `${box[3]}%`,
 });
 
+/** Rules text length varies wildly per card while the box is fixed — shrink
+ *  the font (via the --fit multiplier in cards.css) until the text fits. */
+function useFitRulesText(deps: readonly unknown[]) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.setProperty("--fit", "1");
+      let scale = 1;
+      for (let i = 0; i < 4 && el.scrollHeight > el.clientHeight + 1 && scale > 0.5; i++) {
+        scale = Math.max(0.5, scale * (el.clientHeight / el.scrollHeight));
+        el.style.setProperty("--fit", scale.toFixed(3));
+      }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    // a late web-font swap re-wraps text without resizing the box — re-fit then
+    let disposed = false;
+    document.fonts?.ready.then(() => { if (!disposed) fit(); }).catch(() => {});
+    return () => { disposed = true; ro.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return ref;
+}
+
 export default function FramedCard({ card, width }: { card: GameCard; width?: number }) {
+  const rulesRef = useFitRulesText([card.id, card.text, card.flavor]);
   const frameDef = FRAMES[card.faction];
   if (!frameDef) return null;
   const L = frameDef.layout;
@@ -28,7 +56,7 @@ export default function FramedCard({ card, width }: { card: GameCard; width?: nu
           {comma > -1 ? (<>{name.slice(0, comma + 1)}<br />{name.slice(comma + 1).trim()}</>) : name}
         </span>
       </div>
-      <div className="plate rules" style={rect(frameDef.rules ?? RULES_BOX)}>
+      <div className="plate rules" ref={rulesRef} style={rect(frameDef.rules ?? RULES_BOX)}>
         <p className="rulesText">{card.text}</p>
         {card.flavor && <p className="flavorText">{card.flavor}</p>}
       </div>

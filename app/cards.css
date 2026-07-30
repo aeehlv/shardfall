@@ -161,9 +161,12 @@
 }
 .plate.rules {
   justify-content: flex-start;
-  gap: 1.6cqw;
+  gap: calc(1.6cqw * var(--fit, 1));
   padding: 1.6cqw 1.5cqw 0;
 }
+/* backstop only where the auto-fit runs (FramedCard) — the gallery showcase
+   (GameCard) has no fit loop and may still overflow gracefully */
+.framedCard .plate.rules { overflow: hidden; }
 .plate.subtitle span {
   font-family: var(--font-display), Palatino, Georgia, serif;
   font-weight: 600;
@@ -175,7 +178,7 @@
 }
 .rulesText {
   margin: 0;
-  font-size: 3.4cqw;
+  font-size: calc(3.4cqw * var(--fit, 1));
   line-height: 1.3;
   font-weight: 600;
   color: #efe8da;
@@ -185,7 +188,7 @@
   margin: 0;
   font-family: var(--font-display), Palatino, Georgia, serif;
   font-style: italic;
-  font-size: 2.6cqw;
+  font-size: calc(2.6cqw * var(--fit, 1));
   line-height: 1.28;
   color: rgba(233, 224, 207, 0.72);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
@@ -289,15 +292,15 @@
 
 /* small framed cards (collection grid, store): bigger rules, no flavor */
 @container (max-width: 240px) {
-  .framedCard .rulesText { font-size: 5.2cqw; line-height: 1.28; }
+  .framedCard .rulesText { font-size: calc(5.2cqw * var(--fit, 1)); line-height: 1.28; }
   .framedCard .flavorText { display: none; }
   .framedCard .plate.name span { font-size: 4.6cqw !important; }
 }
 
 /* battle zoom size tier: larger, fully readable rules */
 @container (min-width: 241px) and (max-width: 380px) {
-  .framedCard .rulesText { font-size: 4.3cqw; line-height: 1.3; }
-  .framedCard .flavorText { font-size: 3.2cqw; }
+  .framedCard .rulesText { font-size: calc(4.3cqw * var(--fit, 1)); line-height: 1.3; }
+  .framedCard .flavorText { font-size: calc(3.2cqw * var(--fit, 1)); }
 }
 
 /* ---- rarity treatments ---- */

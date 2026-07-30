@@ -35,8 +35,11 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
 const BOT_WAIT_KEY = "matchmaking.botWaitMs";
 const BOT_WAIT_DEFAULT_MS = 5_000;
 
+/** Whole seconds only — the admin UI edits seconds, and snapping on read keeps
+ *  legacy fractional values (old UI allowed 0.5s steps) consistent with what
+ *  the panel displays. */
 export const clampBotWaitMs = (ms: number) =>
-  Math.min(60_000, Math.max(1_000, Math.trunc(ms)));
+  Math.min(60_000, Math.max(1_000, Math.round(ms / 1_000) * 1_000));
 
 /** How long a ranked ticket waits for a human before falling back to a bot. */
 export async function getBotWaitMs(): Promise<number> {

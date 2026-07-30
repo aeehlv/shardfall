@@ -1,6 +1,6 @@
 import puppeteer from "puppeteer-core";
 
-const S = "/private/tmp/claude-501/-Users-artemetik-Developer-games/a7a6293a-d928-4fb1-b64d-6022978adfea/scratchpad";
+const S = "/private/tmp/claude-501/-Users-artemetik-Developer-games/dcf0e111-41a5-453b-a004-bc1a40f7eee0/scratchpad";
 const browser = await puppeteer.launch({
   executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   headless: "shell",
@@ -12,7 +12,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 
-await page.goto("http://localhost:3800", { waitUntil: "networkidle0" });
+await page.goto("http://localhost:3800/gallery", { waitUntil: "networkidle0" });
 await new Promise((r) => setTimeout(r, 1200)); // let entrance animations finish
 
 // hover the first card to engage tilt + sheen

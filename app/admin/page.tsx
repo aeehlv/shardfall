@@ -170,7 +170,7 @@ function MatchmakingPanel() {
         if (!res.ok) throw new Error(`status ${res.status}`);
         const json = (await res.json()) as { settings: { botWaitMs: number } };
         if (!ctrl.signal.aborted) {
-          setWaitSec((json.settings.botWaitMs / 1000).toFixed(1));
+          setWaitSec(String(Math.round(json.settings.botWaitMs / 1000)));
           setLoaded(true);
         }
       } catch {
@@ -181,9 +181,9 @@ function MatchmakingPanel() {
   }, []);
 
   const save = async () => {
-    const sec = Number(waitSec);
-    if (!Number.isFinite(sec) || sec <= 0) {
-      setNote({ ok: false, text: "Enter a wait in seconds." });
+    const sec = Math.round(Number(waitSec));
+    if (!Number.isFinite(sec) || sec < 1 || sec > 60) {
+      setNote({ ok: false, text: "Enter whole seconds (1–60)." });
       return;
     }
     setBusy(true);
@@ -192,11 +192,11 @@ function MatchmakingPanel() {
       const res = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ botWaitMs: Math.round(sec * 1000) }),
+        body: JSON.stringify({ botWaitMs: sec * 1000 }),
       });
       const json = (await res.json()) as { settings?: { botWaitMs: number }; error?: string };
       if (!res.ok || !json.settings) throw new Error(json.error || `status ${res.status}`);
-      setWaitSec((json.settings.botWaitMs / 1000).toFixed(1));
+      setWaitSec(String(Math.round(json.settings.botWaitMs / 1000)));
       setNote({ ok: true, text: "Saved." });
     } catch (err) {
       setNote({ ok: false, text: err instanceof Error ? err.message : "Save failed." });
@@ -213,7 +213,8 @@ function MatchmakingPanel() {
         <label className="admGrantField admMmField">
           <span>Bot wait (s)</span>
           <input
-            type="number" min={1} max={60} step={0.5} value={waitSec} placeholder="5.0"
+            type="number" min={1} max={60} step={1} inputMode="numeric"
+            value={waitSec} placeholder="5"
             disabled={!loaded}
             data-testid="admin-botwait"
             onChange={(e) => setWaitSec(e.target.value)}
@@ -234,8 +235,69 @@ function MatchmakingPanel() {
   );
 }
 
+type ReleaseDto = {
+  version: string; releasedAt: string; title: string; summary: string;
+  sections: { kind: "Added" | "Changed" | "Fixed"; items: string[] }[];
+};
+
+/** Releases tab: current game version + the changelog, for admins and testers. */
+function ReleasesPanel() {
+  const [data, setData] = useState<{ current: string; releases: ReleaseDto[] } | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/releases", { cache: "no-store", signal: ctrl.signal });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const json = (await res.json()) as { current: string; releases: ReleaseDto[] };
+        if (!ctrl.signal.aborted) setData(json);
+      } catch {
+        if (!ctrl.signal.aborted) setFailed(true);
+      }
+    })();
+    return () => ctrl.abort();
+  }, []);
+
+  if (failed) {
+    return <p className="admEmpty">The release scrolls could not be read — try again in a moment.</p>;
+  }
+  if (!data) {
+    return <p className="admEmpty">Unrolling the scrolls…</p>;
+  }
+  return (
+    <section className="admReleases" data-testid="admin-releases">
+      <p className="admCurrentVersion">
+        Current build <b data-testid="admin-version">v{data.current}</b>
+        {data.releases[0] && <span className="admCurrentWhen"> · {data.releases[0].releasedAt}</span>}
+      </p>
+      {data.releases.map((rel) => (
+        <article className="admPanel admRelease" key={rel.version}>
+          <header className="admReleaseHead">
+            <h2>v{rel.version}</h2>
+            <span className="admReleaseTitle">{rel.title}</span>
+            <span className="admReleaseDate">{rel.releasedAt}</span>
+          </header>
+          <p className="admReleaseSummary">{rel.summary}</p>
+          {rel.sections.map((sec) => (
+            <div className="admReleaseSection" key={sec.kind}>
+              {/* kind lives in data-kind: a literal "fixed" class collides with a global rule */}
+              <h3 className="admChangeKind" data-kind={sec.kind}>{sec.kind}</h3>
+              <ul>
+                {sec.items.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          ))}
+        </article>
+      ))}
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const [denied, setDenied] = useState(false);
+  const [tab, setTab] = useState<"ledger" | "releases">("ledger");
   const [stats, setStats] = useState<Stats | null>(null);
   const [players, setPlayers] = useState<AdminPlayer[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -320,6 +382,13 @@ export default function AdminPage() {
     <main className="admMain" data-testid="admin-page">
       <div className="menuBackdrop" aria-hidden="true" />
       <Link className="admBack" href="/">← Menu</Link>
+      <button
+        className="admReleasesBtn"
+        data-testid="admin-tab-releases"
+        onClick={() => setTab((t) => (t === "releases" ? "ledger" : "releases"))}
+      >
+        {tab === "releases" ? "← Ledger" : "Releases"}
+      </button>
 
       <header className="admHeader">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -327,6 +396,10 @@ export default function AdminPage() {
         <p>Every duelist, every shard, every grant — under one seal.</p>
       </header>
 
+      {tab === "releases" && <ReleasesPanel />}
+
+      {/* the ledger stays mounted (searches, drawers survive a tab flip) — just hidden */}
+      <div className="admTabPane" style={tab === "ledger" ? undefined : { display: "none" }}>
       {/* eslint-disable @next/next/no-img-element */}
       <section className="admTiles" data-testid="admin-stats">
         <div className="admTile">
@@ -441,6 +514,7 @@ export default function AdminPage() {
           </p>
         )}
       </section>
+      </div>
     </main>
   );
 }
